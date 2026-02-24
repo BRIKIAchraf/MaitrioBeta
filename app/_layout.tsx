@@ -16,6 +16,7 @@ import { queryClient } from "@/lib/query-client";
 import { AuthProvider } from "@/context/auth-context";
 import { MissionProvider } from "@/context/mission-context";
 import { ChatProvider } from "@/context/chat-context";
+import { SupportProvider } from "@/context/support-context";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -26,9 +27,15 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ presentation: "modal", headerShown: false }} />
       <Stack.Screen name="(client)" />
       <Stack.Screen name="(artisan)" />
+      <Stack.Screen name="onboarding" />
       <Stack.Screen name="mission/new" options={{ presentation: "modal", headerShown: false }} />
       <Stack.Screen name="mission/[id]" />
       <Stack.Screen name="chat/[id]" />
+      <Stack.Screen name="housing" />
+      <Stack.Screen name="support" />
+      <Stack.Screen name="support-ticket" />
+      <Stack.Screen name="wallet" />
+      <Stack.Screen name="kyc" />
     </Stack>
   );
 }
@@ -57,7 +64,9 @@ export default function RootLayout() {
             <AuthProvider>
               <MissionProvider>
                 <ChatProvider>
-                  <RootLayoutNav />
+                  <SupportProvider>
+                    <RootLayoutNav />
+                  </SupportProvider>
                 </ChatProvider>
               </MissionProvider>
             </AuthProvider>

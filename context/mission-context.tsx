@@ -5,9 +5,13 @@ import * as Crypto from "expo-crypto";
 export type MissionStatus =
   | "pending"
   | "accepted"
+  | "en_route"
+  | "arrived"
   | "in_progress"
   | "completed"
-  | "cancelled";
+  | "validated"
+  | "cancelled"
+  | "disputed";
 
 export type MissionCategory =
   | "plomberie"
@@ -19,6 +23,24 @@ export type MissionCategory =
   | "climatisation"
   | "maconnerie"
   | "autre";
+
+export type UrgencyLevel = "normal" | "urgent" | "tres_urgent";
+
+export interface RatingCriteria {
+  quality: number;
+  punctuality: number;
+  communication: number;
+  overall: number;
+  comment?: string;
+}
+
+export interface PaymentInfo {
+  amount: number;
+  status: "pending" | "escrowed" | "released" | "refunded";
+  paidAt?: string;
+  releasedAt?: string;
+  method: string;
+}
 
 export interface Mission {
   id: string;
@@ -34,12 +56,20 @@ export interface Mission {
   scheduledTime: string;
   status: MissionStatus;
   photos: string[];
+  checkInPhotos: string[];
+  checkOutPhotos: string[];
   budget?: number;
-  rating?: number;
+  estimatedPrice?: { min: number; max: number };
+  estimatedDuration?: string;
+  urgency: UrgencyLevel;
+  rating?: RatingCriteria;
   checkInTime?: string;
   checkOutTime?: string;
   checkInLocation?: { lat: number; lng: number };
+  checkOutLocation?: { lat: number; lng: number };
   completionReport?: string;
+  clientSignature?: boolean;
+  payment?: PaymentInfo;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,9 +83,15 @@ interface MissionContextValue {
   getAvailableMissions: () => Mission[];
   getArtisanMissions: (artisanId: string) => Mission[];
   acceptMission: (missionId: string, artisanId: string, artisanName: string) => Promise<void>;
+  setEnRoute: (missionId: string) => Promise<void>;
+  checkIn: (missionId: string, location: { lat: number; lng: number }, photos: string[]) => Promise<void>;
   startMission: (missionId: string) => Promise<void>;
-  completeMission: (missionId: string, report: string) => Promise<void>;
-  rateMission: (missionId: string, rating: number) => Promise<void>;
+  completeMission: (missionId: string, report: string, photos: string[]) => Promise<void>;
+  validateMission: (missionId: string) => Promise<void>;
+  rateMission: (missionId: string, rating: RatingCriteria) => Promise<void>;
+  disputeMission: (missionId: string) => Promise<void>;
+  escrowPayment: (missionId: string, amount: number) => Promise<void>;
+  releasePayment: (missionId: string) => Promise<void>;
 }
 
 export interface CreateMissionData {
@@ -69,10 +105,26 @@ export interface CreateMissionData {
   scheduledTime: string;
   photos: string[];
   budget?: number;
+  urgency?: UrgencyLevel;
 }
 
 const MissionContext = createContext<MissionContextValue | null>(null);
 const STORAGE_KEY = "@maison_missions";
+
+function estimateDuration(category: MissionCategory): string {
+  const durations: Record<MissionCategory, string> = {
+    plomberie: "1-3h",
+    electricite: "2-4h",
+    peinture: "4-8h",
+    menuiserie: "3-6h",
+    jardinage: "2-4h",
+    nettoyage: "2-4h",
+    climatisation: "2-4h",
+    maconnerie: "4-8h",
+    autre: "2-4h",
+  };
+  return durations[category] || "2-4h";
+}
 
 function generateSeedMissions(): Mission[] {
   const now = new Date();
@@ -94,7 +146,12 @@ function generateSeedMissions(): Mission[] {
       scheduledTime: "09:00",
       status: "pending",
       photos: [],
+      checkInPhotos: [],
+      checkOutPhotos: [],
+      urgency: "normal" as UrgencyLevel,
       budget: 150,
+      estimatedPrice: { min: 120, max: 180 },
+      estimatedDuration: "1-2h",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -110,7 +167,12 @@ function generateSeedMissions(): Mission[] {
       scheduledTime: "14:00",
       status: "pending",
       photos: [],
+      checkInPhotos: [],
+      checkOutPhotos: [],
+      urgency: "normal" as UrgencyLevel,
       budget: 200,
+      estimatedPrice: { min: 150, max: 250 },
+      estimatedDuration: "2-3h",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -126,7 +188,12 @@ function generateSeedMissions(): Mission[] {
       scheduledTime: "08:30",
       status: "pending",
       photos: [],
+      checkInPhotos: [],
+      checkOutPhotos: [],
+      urgency: "urgent" as UrgencyLevel,
       budget: 350,
+      estimatedPrice: { min: 280, max: 400 },
+      estimatedDuration: "4-6h",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -161,10 +228,16 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   }
 
   async function createMission(data: CreateMissionData): Promise<Mission> {
+    const budget = data.budget || 0;
     const mission: Mission = {
       ...data,
       id: Crypto.randomUUID(),
       status: "pending",
+      checkInPhotos: [],
+      checkOutPhotos: [],
+      urgency: data.urgency || "normal",
+      estimatedPrice: budget ? { min: Math.round(budget * 0.8), max: Math.round(budget * 1.2) } : undefined,
+      estimatedDuration: estimateDuration(data.category),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -199,23 +272,62 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     await updateMission(missionId, { artisanId, artisanName, status: "accepted" });
   }
 
-  async function startMission(missionId: string) {
+  async function setEnRoute(missionId: string) {
+    await updateMission(missionId, { status: "en_route" });
+  }
+
+  async function checkIn(missionId: string, location: { lat: number; lng: number }, photos: string[]) {
     await updateMission(missionId, {
-      status: "in_progress",
+      status: "arrived",
       checkInTime: new Date().toISOString(),
+      checkInLocation: location,
+      checkInPhotos: photos,
     });
   }
 
-  async function completeMission(missionId: string, report: string) {
+  async function startMission(missionId: string) {
+    await updateMission(missionId, { status: "in_progress" });
+  }
+
+  async function completeMission(missionId: string, report: string, photos: string[]) {
     await updateMission(missionId, {
       status: "completed",
       checkOutTime: new Date().toISOString(),
       completionReport: report,
+      checkOutPhotos: photos,
     });
   }
 
-  async function rateMission(missionId: string, rating: number) {
+  async function validateMission(missionId: string) {
+    const mission = missions.find((m) => m.id === missionId);
+    await updateMission(missionId, {
+      status: "validated",
+      clientSignature: true,
+      payment: mission?.payment ? { ...mission.payment, status: "released", releasedAt: new Date().toISOString() } : undefined,
+    });
+  }
+
+  async function rateMission(missionId: string, rating: RatingCriteria) {
     await updateMission(missionId, { rating });
+  }
+
+  async function disputeMission(missionId: string) {
+    await updateMission(missionId, { status: "disputed" });
+  }
+
+  async function escrowPayment(missionId: string, amount: number) {
+    await updateMission(missionId, {
+      payment: { amount, status: "escrowed", paidAt: new Date().toISOString(), method: "card" },
+    });
+  }
+
+  async function releasePayment(missionId: string) {
+    const mission = missions.find((m) => m.id === missionId);
+    if (mission?.payment) {
+      await updateMission(missionId, {
+        payment: { ...mission.payment, status: "released", releasedAt: new Date().toISOString() },
+      });
+    }
   }
 
   const value = useMemo<MissionContextValue>(
@@ -228,9 +340,15 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       getAvailableMissions,
       getArtisanMissions,
       acceptMission,
+      setEnRoute,
+      checkIn,
       startMission,
       completeMission,
+      validateMission,
       rateMission,
+      disputeMission,
+      escrowPayment,
+      releasePayment,
     }),
     [missions, isLoading]
   );
