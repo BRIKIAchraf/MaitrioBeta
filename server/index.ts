@@ -177,6 +177,10 @@ function configureExpoAndLanding(app: express.Application) {
         changeOrigin: true,
         ws: true,
         on: {
+          proxyReq: (proxyReq, req, res) => {
+            // Set host header to localhost to bypass Expo's host check
+            proxyReq.setHeader("host", `localhost:${expoWebPort}`);
+          },
           error: (err, req, res) => {
             log(`Proxy error: ${err.message}`);
             if (res && !("writableEnded" in res && (res as any).writableEnded)) {
