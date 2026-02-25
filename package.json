@@ -5,11 +5,13 @@
   "scripts": {
     "postinstall": "patch-package",
     "server:dev": "NODE_ENV=development tsx server/index.ts",
+    "expo:web": "EXPO_WEB_PORT=8081 npx expo start --web --port 8081 --host localhost",
     "expo:start:static:build": "npx expo start --no-dev --minify --localhost",
     "expo:static:build": "node scripts/build.js",
     "server:build": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server_dist",
     "server:prod": "NODE_ENV=production node server_dist/index.js",
     "db:push": "drizzle-kit push",
+    "dev": "NODE_ENV=development EXPO_WEB_PORT=8081 tsx server/index.ts & npx expo start --web --port 8081 --host localhost",
     "start": "npx expo start",
     "lint": "npx expo lint",
     "lint:fix": "npx expo lint --fix"
@@ -17,6 +19,7 @@
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo/vector-icons": "^15.0.3",
+    "@lottiefiles/dotlottie-react": "^0.18.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@stardazed/streams-text-encoding": "^1.0.2",
     "@tanstack/react-query": "^5.83.0",
@@ -46,8 +49,8 @@
     "http-proxy-middleware": "^3.0.5",
     "lottie-react-native": "^7.3.6",
     "pg": "^8.16.3",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.76.7",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-keyboard-controller": "1.18.5",

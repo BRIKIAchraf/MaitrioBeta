@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 const log = console.log;
@@ -154,6 +155,41 @@ function serveLandingPage({
 }
 
 function configureExpoAndLanding(app: express.Application) {
+  const isDev = process.env.NODE_ENV === "development";
+
+  if (isDev) {
+    const expoWebPort = parseInt(process.env.EXPO_WEB_PORT || "8081", 10);
+    log(`Dev mode: proxying web requests to Expo Metro on port ${expoWebPort}`);
+
+    app.use(
+      "/",
+      (req: Request, res: Response, next: NextFunction) => {
+        if (req.path.startsWith("/api")) {
+          return next();
+        }
+        next("route");
+      }
+    );
+
+    app.use(
+      createProxyMiddleware({
+        target: `http://localhost:${expoWebPort}`,
+        changeOrigin: true,
+        ws: true,
+        on: {
+          error: (err, req, res) => {
+            log(`Proxy error: ${err.message}`);
+            if (res && !("writableEnded" in res && (res as any).writableEnded)) {
+              (res as any).status?.(502)?.send?.("Expo dev server not ready. Start Expo first.");
+            }
+          },
+        },
+      })
+    );
+
+    return;
+  }
+
   const templatePath = path.resolve(
     process.cwd(),
     "server",
