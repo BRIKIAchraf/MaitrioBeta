@@ -20,12 +20,15 @@ import { useMissions } from "@/context/mission-context";
 const { width } = Dimensions.get("window");
 
 const CATEGORY_ICONS: Record<string, string> = {
+  debarras: "trash",
+  nettoyage: "sparkles",
+  serrurier: "key",
   plomberie: "water",
   electricite: "flash",
+  frigoriste: "snow",
   peinture: "color-palette",
   menuiserie: "hammer",
   jardinage: "leaf",
-  nettoyage: "sparkles",
   climatisation: "thermometer",
   maconnerie: "construct",
   autre: "build",
@@ -39,9 +42,16 @@ export default function ArtisanDashboardScreen() {
   const available = getAvailableMissions();
   const myMissions = user ? getArtisanMissions(user.id) : [];
   const activeMission = myMissions.find((m) => m.status === "in_progress");
-  const completedCount = myMissions.filter((m) => m.status === "completed").length;
+  const completedMissions = myMissions.filter((m) => m.status === "completed" || m.status === "validated");
+  const completedCount = completedMissions.length;
+  const disputeCount = myMissions.filter((m) => m.status === "disputed").length;
+  const ratingSum = completedMissions.reduce((sum, m) => sum + (m.rating?.overall || 0), 0);
+  const avgRating = completedCount > 0 ? ratingSum / completedCount : 0;
+
+  // Trust Score calculation (Mock logic)
+  const trustScore = Math.min(5, 4 + (completedCount * 0.1) - (disputeCount * 0.5));
+  const badge = trustScore >= 4.5 ? "Elite" : trustScore >= 4.0 ? "Pro" : "Vérifié";
   const revenue = user?.revenue ?? completedCount * 150;
-  const trustScore = user?.trustScore ?? 4.2;
 
   return (
     <ScrollView
@@ -58,7 +68,12 @@ export default function ArtisanDashboardScreen() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.greeting}>Dashboard Artisan</Text>
-            <Text style={styles.artisanName}>{user?.name?.split(" ")[0] || "Artisan"}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.artisanName}>{user?.name?.split(" ")[0] || "Artisan"}</Text>
+              <View style={[styles.trustBadge, { backgroundColor: badge === "Elite" ? Colors.accent : badge === "Pro" ? Colors.primary : Colors.textMuted }]}>
+                <Text style={styles.trustBadgeText}>{badge}</Text>
+              </View>
+            </View>
           </View>
           <Pressable
             style={[
@@ -82,15 +97,31 @@ export default function ArtisanDashboardScreen() {
                 { color: user?.kycStatus === "verified" ? Colors.success : Colors.warning },
               ]}
             >
-              {user?.kycStatus === "verified" ? "KYC Vérifié" : "KYC en cours"}
+              {user?.kycStatus === "verified" ? "KYC Vérifié" : "En cours"}
             </Text>
           </Pressable>
         </View>
 
         <View style={styles.statsGrid}>
-          <StatCard value={`${revenue}€`} label="Revenus" icon="cash-outline" />
+          <Pressable
+            style={styles.statPressable}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(artisan)/wallet");
+            }}
+          >
+            <StatCard value={`${revenue}€`} label="Portefeuille" icon="wallet-outline" />
+          </Pressable>
           <StatCard value={completedCount.toString()} label="Terminées" icon="checkmark-circle-outline" />
-          <StatCard value={`${trustScore}/5`} label="Trust Score" icon="star-outline" gold />
+          <Pressable
+            style={styles.statPressable}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/(artisan)/growth");
+            }}
+          >
+            <StatCard value={`${trustScore}/5`} label="Elite Score" icon="star-outline" gold />
+          </Pressable>
         </View>
       </LinearGradient>
 
@@ -111,6 +142,20 @@ export default function ArtisanDashboardScreen() {
               </View>
               <Ionicons name="chevron-forward" size={18} color={Colors.success} />
             </LinearGradient>
+          </Pressable>
+        )}
+
+        {user?.kycStatus !== "verified" && (
+          <Pressable
+            style={styles.kycWarningBanner}
+            onPress={() => router.push("/(artisan)/kyc")}
+          >
+            <Ionicons name="alert-circle" size={24} color={Colors.warning} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={styles.kycWarningTitle}>Action Requise : KYC</Text>
+              <Text style={styles.kycWarningText}>Veuillez soumettre vos documents pour débloquer les missions.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.warning} />
           </Pressable>
         )}
 
@@ -140,6 +185,42 @@ export default function ArtisanDashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.proSection}>
+          <Text style={styles.sectionTitle}>Maîtrio Academy & Services</Text>
+          <View style={styles.proGrid}>
+            <ProCard
+              title="Academy"
+              icon="school-outline"
+              color="#6366F1"
+              onPress={() => router.push("/(artisan)/academy")}
+            />
+            <ProCard
+              title="Mes Services"
+              icon="list-outline"
+              color="#3B82F6"
+              onPress={() => router.push("/(artisan)/services")}
+            />
+            <ProCard
+              title="Marketplace"
+              icon="cart-outline"
+              color="#10B981"
+              onPress={() => router.push("/(artisan)/marketplace")}
+            />
+            <ProCard
+              title="Disponibilité"
+              icon="calendar-outline"
+              color="#EF4444"
+              onPress={() => router.push("/(artisan)/availability")}
+            />
+            <ProCard
+              title="Mon Portfolio"
+              icon="images-outline"
+              color="#F59E0B"
+              onPress={() => router.push("/(artisan)/portfolio")}
+            />
+          </View>
+        </View>
+
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Missions disponibles ({available.length})</Text>
           <Pressable onPress={() => router.push("/(artisan)/missions")}>
@@ -163,6 +244,20 @@ export default function ArtisanDashboardScreen() {
         )}
       </View>
     </ScrollView>
+  );
+}
+
+function ProCard({ title, icon, color, onPress }: { title: string; icon: any; color: string; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.proCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+      onPress={onPress}
+    >
+      <View style={[styles.proIconBox, { backgroundColor: color + "15" }]}>
+        <Ionicons name={icon} size={24} color={color} />
+      </View>
+      <Text style={styles.proCardTitle}>{title}</Text>
+    </Pressable>
   );
 }
 
@@ -243,7 +338,10 @@ const styles = StyleSheet.create({
   },
   headerTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 },
   greeting: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   artisanName: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
+  trustBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  trustBadgeText: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" },
   kycBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -311,6 +409,24 @@ const styles = StyleSheet.create({
   trustRating: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginLeft: 8 },
   trustProgressBar: { height: 6, backgroundColor: Colors.surfaceSecondary, borderRadius: 3, overflow: "hidden" },
   trustProgressFill: { height: "100%", borderRadius: 3 },
+  proSection: { marginTop: 10 },
+  proGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 15 },
+  proCard: {
+    width: (width - 52) / 2,
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 20,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    alignItems: "center",
+  },
+  proIconBox: { width: 48, height: 48, borderRadius: 16, alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  proCardTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.text },
   sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   sectionLink: { fontSize: 13, fontFamily: "Inter_500Medium", color: Colors.accent },
   emptyCard: {
@@ -362,4 +478,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   acceptBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.primary },
+  statPressable: { flex: 1 },
+  kycWarningBanner: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.warning + "10", padding: 16, borderRadius: 20, borderWidth: 1, borderColor: Colors.warning + "30", marginBottom: 12 },
+  kycWarningTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.warning },
+  kycWarningText: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
 });

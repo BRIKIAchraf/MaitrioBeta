@@ -9,7 +9,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/auth-context";
+import { useMissions } from "@/context/mission-context";
 import { useSupport, TicketPriority } from "@/context/support-context";
+import * as Linking from "expo-linking";
 
 const CATEGORIES = ["Paiement", "Mission", "Litige", "Compte", "Technique", "Autre"];
 const PRIORITIES: { key: TicketPriority; label: string; color: string }[] = [
@@ -183,6 +185,16 @@ export default function SupportTicketScreen() {
           </View>
         </View>
 
+        <Pressable
+          style={styles.emailSupportBtn}
+          onPress={() => {
+            Linking.openURL("mailto:support@eliteflow.fr");
+          }}
+        >
+          <Ionicons name="mail-open-outline" size={18} color={Colors.primary} />
+          <Text style={styles.emailSupportText}>Contacter par Email direct</Text>
+        </Pressable>
+
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Description</Text>
           <TextInput
@@ -249,4 +261,6 @@ const styles = StyleSheet.create({
   inputBar: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.borderLight, backgroundColor: Colors.surface },
   responseInput: { flex: 1, backgroundColor: Colors.surfaceSecondary, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_400Regular", color: Colors.text, maxHeight: 100, borderWidth: 1, borderColor: Colors.border },
   sendBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.primary, alignItems: "center", justifyContent: "center" },
+  emailSupportBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 14, backgroundColor: Colors.surface, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed" },
+  emailSupportText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.primary },
 });

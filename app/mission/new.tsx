@@ -18,18 +18,24 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/auth-context";
 import { useMissions, MissionCategory } from "@/context/mission-context";
+import { calculateDynamicEstimation, EstimationResult } from "@/utils/estimation-engine";
+import { BlurView } from "expo-blur";
+import { useChat } from "@/context/chat-context";
 
 type Step = 1 | 2 | 3;
 
 const CATEGORIES: { key: MissionCategory; label: string; icon: string; color: string }[] = [
+  { key: "debarras", label: "Débarras", icon: "trash", color: "#6B7280" },
+  { key: "nettoyage", label: "Nettoyage", icon: "sparkles", color: "#06B6D4" },
+  { key: "serrurier", label: "Serrurier", icon: "key", color: "#F59E0B" },
   { key: "plomberie", label: "Plomberie", icon: "water", color: "#3B82F6" },
-  { key: "electricite", label: "Électricité", icon: "flash", color: "#F59E0B" },
+  { key: "electricite", label: "Électricité", icon: "flash", color: "#FBBF24" },
+  { key: "frigoriste", label: "Frigoriste", icon: "snow", color: "#60A5FA" },
   { key: "peinture", label: "Peinture", icon: "color-palette", color: "#EC4899" },
   { key: "menuiserie", label: "Menuiserie", icon: "hammer", color: "#8B5CF6" },
   { key: "jardinage", label: "Jardinage", icon: "leaf", color: "#22C55E" },
-  { key: "nettoyage", label: "Nettoyage", icon: "sparkles", color: "#06B6D4" },
   { key: "climatisation", label: "Climatisation", icon: "thermometer", color: "#F97316" },
-  { key: "maconnerie", label: "Maçonnerie", icon: "construct", color: "#6B7280" },
+  { key: "maconnerie", label: "Maçonnerie", icon: "construct", color: "#78350F" },
   { key: "autre", label: "Autre", icon: "build", color: "#14B8A6" },
 ];
 
@@ -51,6 +57,21 @@ export default function NewMissionScreen() {
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [estimation, setEstimation] = useState<EstimationResult | null>(null);
+
+  React.useEffect(() => {
+    if (category && (title || description)) {
+      const result = calculateDynamicEstimation(
+        category as MissionCategory,
+        title,
+        description,
+        "normal", // Default urgency for estimation
+        scheduledTime,
+        scheduledDate
+      );
+      setEstimation(result);
+    }
+  }, [category, title, description, scheduledTime, scheduledDate]);
 
   function getTomorrow() {
     const t = new Date();
@@ -165,8 +186,7 @@ export default function NewMissionScreen() {
                     {category === cat.key && (
                       <LinearGradient
                         colors={[Colors.primary + "15", Colors.primary + "08"]}
-                        style={StyleSheet.absoluteFill}
-                        borderRadius={16}
+                        style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
                       />
                     )}
                     <View
@@ -196,6 +216,49 @@ export default function NewMissionScreen() {
                 value={description}
                 onChangeText={setDescription}
               />
+
+              {estimation && category && (
+                <View style={styles.estimationCard}>
+                  <BlurView intensity={Platform.OS === "ios" ? 40 : 100} tint="light" style={styles.estimationBlur}>
+                    <LinearGradient
+                      colors={["rgba(201,168,76,0.1)", "rgba(255,255,255,0.05)"]}
+                      style={styles.estimationGrad}
+                    >
+                      <View style={styles.estimationHeader}>
+                        <View style={styles.aiBadge}>
+                          <Ionicons name="sparkles" size={12} color={Colors.accent} />
+                          <Text style={styles.aiBadgeText}>CONCIERGE IA</Text>
+                        </View>
+                        <Text style={styles.estimationTitle}>Estimation instantanée</Text>
+                      </View>
+
+                      <View style={styles.estimationGrid}>
+                        <View style={styles.estimationItem}>
+                          <Ionicons name="cash-outline" size={16} color={Colors.accent} />
+                          <View>
+                            <Text style={styles.estimationLabel}>Prix estimé</Text>
+                            <Text style={styles.estimationValue}>{estimation.minPrice}€ - {estimation.maxPrice}€</Text>
+                          </View>
+                        </View>
+                        <View style={styles.estimationItem}>
+                          <Ionicons name="time-outline" size={16} color={Colors.accent} />
+                          <View>
+                            <Text style={styles.estimationLabel}>Durée prévue</Text>
+                            <Text style={styles.estimationValue}>{estimation.duration}</Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={styles.complexityTrack}>
+                        <Text style={styles.complexityLabel}>Complexité: {estimation.complexityScore}/10</Text>
+                        <View style={styles.complexityBar}>
+                          <View style={[styles.complexityFill, { width: `${estimation.complexityScore * 10}%` as any }]} />
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </BlurView>
+                </View>
+              )}
             </View>
           )}
 
@@ -264,10 +327,9 @@ export default function NewMissionScreen() {
                       {scheduledTime === t && (
                         <LinearGradient
                           colors={[Colors.primary, Colors.primaryLight]}
-                          style={StyleSheet.absoluteFill}
+                          style={[StyleSheet.absoluteFill, { borderRadius: 12 }]}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 0 }}
-                          borderRadius={12}
                         />
                       )}
                       <Text style={[styles.timeChipText, scheduledTime === t && styles.timeChipTextActive]}>{t}</Text>
@@ -556,4 +618,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   nextBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  estimationCard: { marginTop: 8, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "rgba(201,168,76,0.2)" },
+  estimationBlur: { flex: 1 },
+  estimationGrad: { padding: 16, gap: 12 },
+  estimationHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  aiBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(201,168,76,0.15)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  aiBadgeText: { fontSize: 9, fontFamily: "Inter_700Bold", color: Colors.accent, letterSpacing: 0.5 },
+  estimationTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.textSecondary },
+  estimationGrid: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  estimationItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.5)", padding: 10, borderRadius: 12 },
+  estimationLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  estimationValue: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.text },
+  complexityTrack: { gap: 6 },
+  complexityLabel: { fontSize: 11, fontFamily: "Inter_500Medium", color: Colors.textSecondary },
+  complexityBar: { height: 4, backgroundColor: "rgba(0,0,0,0.05)", borderRadius: 2, overflow: "hidden" },
+  complexityFill: { height: "100%", backgroundColor: Colors.accent, borderRadius: 2 },
 });

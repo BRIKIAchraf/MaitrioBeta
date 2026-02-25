@@ -17,7 +17,7 @@ function NativeTabLayout() {
         <Label>Dashboard</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="missions">
-        <Icon sf={{ default: "list.bullet", selected: "list.bullet.fill" }} />
+        <Icon sf={{ default: "list.bullet", selected: "list.bullet" }} />
         <Label>Missions</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
@@ -100,8 +100,10 @@ export default function ArtisanLayout() {
   useEffect(() => {
     if (!user) {
       router.replace("/");
-    } else if (user.role !== "artisan") {
+    } else if (user.role === "client") {
       router.replace("/(client)");
+    } else if (user.role === "admin") {
+      router.replace("/(admin)");
     }
   }, [user]);
 

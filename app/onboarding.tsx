@@ -7,35 +7,46 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import LottieAnimation from "@/components/LottieAnimation";
 
 const { width, height } = Dimensions.get("window");
 
 const SLIDES = [
   {
     icon: "home",
-    title: "Bienvenue sur Maison",
-    subtitle: "La plateforme premium de services a domicile qui connecte clients et artisans certifies",
+    title: "Bienvenue sur Elite Flow",
+    subtitle: "L'excellence au service de votre habitat : connectez-vous aux meilleurs artisans d'Île-de-France",
     color: Colors.primary,
   },
   {
     icon: "shield-checkmark",
-    title: "Artisans verifies",
-    subtitle: "Tous nos artisans passent une verification KYC rigoureuse pour garantir votre securite",
+    title: "Artisans vérifiés",
+    subtitle: "Tous nos artisans passent une vérification KYC rigoureuse pour garantir votre sécurité",
     color: Colors.info,
   },
   {
     icon: "location",
-    title: "Suivi en temps reel",
-    subtitle: "Suivez l'avancement de vos missions avec GPS check-in/check-out et timeline detaillee",
+    title: "Suivi en temps réel",
+    subtitle: "Suivez l'avancement de vos missions avec GPS check-in/check-out et timeline détaillée",
     color: "#22C55E",
   },
   {
     icon: "card",
-    title: "Paiement securise",
-    subtitle: "Vos paiements sont proteges en sequestre jusqu'a validation des travaux",
+    title: "Paiement sécurisé",
+    subtitle: "Vos paiements sont protégés en séquestre jusqu'à validation des travaux",
     color: Colors.accent,
   },
 ];
+
+function getLottieForSlide(icon: string) {
+  switch (icon) {
+    case "home": return "https://assets3.lottiefiles.com/packages/lf20_chcyv9w9.json";
+    case "shield-checkmark": return "https://assets1.lottiefiles.com/packages/lf20_6p8ov8.json";
+    case "location": return "https://assets10.lottiefiles.com/packages/lf20_myejio3g.json";
+    case "card": return "https://assets8.lottiefiles.com/packages/lf20_yzn89v.json";
+    default: return "https://assets3.lottiefiles.com/packages/lf20_chcyv9w9.json";
+  }
+}
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -80,7 +91,10 @@ export default function OnboardingScreen() {
           <View style={[styles.slide, { width }]}>
             <View style={[styles.iconCircle, { backgroundColor: item.color + "18" }]}>
               <View style={[styles.iconInner, { backgroundColor: item.color + "25" }]}>
-                <Ionicons name={item.icon as any} size={56} color={item.color} />
+                <LottieAnimation
+                  source={{ uri: getLottieForSlide(item.icon) }}
+                  style={{ width: 120, height: 120 }}
+                />
               </View>
             </View>
             <Text style={styles.slideTitle}>{item.title}</Text>

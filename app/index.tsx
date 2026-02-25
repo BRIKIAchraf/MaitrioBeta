@@ -21,6 +21,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/auth-context";
+import LottieAnimation from "@/components/LottieAnimation";
+import { useMissions } from "@/context/mission-context";
 
 const { width, height } = Dimensions.get("window");
 
@@ -38,14 +40,8 @@ export default function WelcomeScreen() {
   const buttonsOpacity = useSharedValue(0);
 
   useEffect(() => {
-    if (!isLoading && user) {
-      if (user.role === "client") {
-        router.replace("/(client)");
-      } else {
-        router.replace("/(artisan)");
-      }
-      return;
-    }
+    if (isLoading || user) return;
+
     logoOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
     logoScale.value = withDelay(200, withSpring(1, { damping: 12 }));
     titleOpacity.value = withDelay(500, withTiming(1, { duration: 600 }));
@@ -55,6 +51,7 @@ export default function WelcomeScreen() {
     cardsTranslate.value = withDelay(900, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) }));
     buttonsOpacity.value = withDelay(1100, withTiming(1, { duration: 600 }));
   }, [isLoading, user]);
+
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -96,7 +93,10 @@ export default function WelcomeScreen() {
             colors={[Colors.primary, Colors.primaryLight]}
             style={styles.logoGradient}
           >
-            <Ionicons name="home" size={36} color="#FFFFFF" />
+            <LottieAnimation
+              source={{ uri: "https://assets9.lottiefiles.com/packages/lf20_m6zL9X.json" }}
+              style={{ width: 100, height: 100 }}
+            />
           </LinearGradient>
           <View style={styles.logoAccent}>
             <LinearGradient
@@ -106,9 +106,9 @@ export default function WelcomeScreen() {
           </View>
         </Animated.View>
 
-        <Animated.Text style={[styles.brandName, titleStyle]}>Maison</Animated.Text>
+        <Animated.Text style={[styles.brandName, titleStyle]}>Elite Flow</Animated.Text>
         <Animated.Text style={[styles.tagline, subtitleStyle]}>
-          La plateforme premium{"\n"}pour vos travaux à domicile
+          Le luxe de la sérénité{"\n"}au service de votre habitat
         </Animated.Text>
       </View>
 
@@ -193,10 +193,9 @@ function RoleCard({
       {primary && (
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          borderRadius={20}
         />
       )}
       <View style={[styles.roleCardIconBox, primary && styles.roleCardIconBoxPrimary]}>

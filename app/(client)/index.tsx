@@ -7,6 +7,7 @@ import {
   Pressable,
   Platform,
   Dimensions,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,24 +26,27 @@ import { useMissions } from "@/context/mission-context";
 const { width } = Dimensions.get("window");
 
 const CATEGORY_ICONS: Record<string, string> = {
+  debarras: "trash",
+  nettoyage: "sparkles",
+  serrurier: "key",
   plomberie: "water",
   electricite: "flash",
+  frigoriste: "snow",
   peinture: "color-palette",
   menuiserie: "hammer",
   jardinage: "leaf",
-  nettoyage: "sparkles",
   climatisation: "thermometer",
   maconnerie: "construct",
   autre: "build",
 };
 
 const QUICK_ACTIONS = [
+  { key: "serrurier", label: "Serrurier", icon: "key", color: "#F59E0B" },
   { key: "plomberie", label: "Plomberie", icon: "water", color: "#3B82F6" },
-  { key: "electricite", label: "Électricité", icon: "flash", color: "#F59E0B" },
-  { key: "peinture", label: "Peinture", icon: "color-palette", color: "#EC4899" },
-  { key: "menuiserie", label: "Menuiserie", icon: "hammer", color: "#8B5CF6" },
-  { key: "jardinage", label: "Jardinage", icon: "leaf", color: "#22C55E" },
+  { key: "electricite", label: "Électricité", icon: "flash", color: "#FBBF24" },
+  { key: "debarras", label: "Débarras", icon: "trash", color: "#6B7280" },
   { key: "nettoyage", label: "Nettoyage", icon: "sparkles", color: "#06B6D4" },
+  { key: "frigoriste", label: "Frigoriste", icon: "snow", color: "#60A5FA" },
 ];
 
 export default function ClientHomeScreen() {
@@ -77,7 +81,7 @@ export default function ClientHomeScreen() {
           </View>
           <Pressable
             style={({ pressed }) => [styles.notifBtn, pressed && { opacity: 0.7 }]}
-            onPress={() => {}}
+            onPress={() => { }}
           >
             <Ionicons name="notifications-outline" size={22} color="#FFFFFF" />
           </Pressable>
@@ -101,9 +105,68 @@ export default function ClientHomeScreen() {
             </View>
           </View>
         </View>
+
+        <Pressable
+          style={styles.searchEntry}
+          onPress={() => router.push("/(client)/search")}
+        >
+          <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" />
+          <Text style={styles.searchPlaceholder}>Rechercher un artisan (Plombier, Électricien...)</Text>
+        </Pressable>
       </LinearGradient>
 
       <View style={styles.body}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.promoSlider}
+          contentContainerStyle={styles.promoContent}
+        >
+          <Pressable onPress={() => router.push("/(client)/scan")}>
+            <LinearGradient colors={["#6366F1", "#4F46E5"]} style={styles.promoCard}>
+              <View style={styles.promoText}>
+                <Text style={styles.promoTitle}>IA Scan Direct</Text>
+                <Text style={styles.promoSub}>Diagnostiquez votre panne en 10s</Text>
+              </View>
+              <Ionicons name="scan" size={40} color="rgba(255,255,255,0.3)" />
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/(client)/prices")}>
+            <LinearGradient colors={[Colors.accent, "#B8860B"]} style={styles.promoCard}>
+              <View style={styles.promoText}>
+                <Text style={styles.promoTitle}>Prix Fixes</Text>
+                <Text style={styles.promoSub}>Transparence Axa/Allianz</Text>
+              </View>
+              <Ionicons name="pricetag" size={40} color="rgba(255,255,255,0.3)" />
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/(client)/maintenance")}>
+            <LinearGradient colors={["#10B981", "#059669"]} style={styles.promoCard}>
+              <View style={styles.promoText}>
+                <Text style={styles.promoTitle}>Sérénité</Text>
+                <Text style={styles.promoSub}>Maintenance préventive</Text>
+              </View>
+              <Ionicons name="shield-checkmark" size={40} color="rgba(255,255,255,0.3)" />
+            </LinearGradient>
+          </Pressable>
+        </ScrollView>
+        {!user?.verified && (
+          <Pressable
+            style={styles.verifyBanner}
+            onPress={() => Alert.alert("Vérification", "Un email de confirmation vous a été envoyé à " + user?.email)}
+          >
+            <View style={styles.verifyIcon}>
+              <Ionicons name="mail-unread" size={20} color={Colors.warning} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.verifyTitle}>Vérifiez votre email</Text>
+              <Text style={styles.verifyText}>Sécurisez votre compte pour accéder à toutes les fonctions.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </Pressable>
+        )}
         <Pressable
           style={({ pressed }) => [styles.newMissionBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
           onPress={() => {
@@ -129,13 +192,13 @@ export default function ClientHomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.quickActionsRow}
         >
-          {QUICK_ACTIONS.map((action) => (
+          {QUICK_ACTIONS.map(({ key, ...action }) => (
             <QuickActionBtn
-              key={action.key}
+              key={key}
               {...action}
               onPress={() => {
                 Haptics.selectionAsync();
-                router.push({ pathname: "/mission/new", params: { category: action.key } });
+                router.push({ pathname: "/mission/new", params: { category: key } });
               }}
             />
           ))}
@@ -163,6 +226,19 @@ export default function ClientHomeScreen() {
             <Text style={styles.emptySubtitle}>Créez votre première demande pour trouver un artisan qualifié</Text>
           </View>
         )}
+
+        <Pressable
+          style={styles.referralBanner}
+          onPress={() => router.push("/(client)/referral")}
+        >
+          <LinearGradient colors={["#6366F1", "#4F46E5"]} style={styles.referralGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
+            <View style={styles.referralInfo}>
+              <Text style={styles.referralTitle}>Gagnez 10€ de crédit</Text>
+              <Text style={styles.referralDesc}>Partagez Maîtrio avec vos amis</Text>
+            </View>
+            <Ionicons name="gift" size={30} color="white" />
+          </LinearGradient>
+        </Pressable>
 
         <SectionHeader title="Nos engagements" />
         <View style={styles.pledgesGrid}>
@@ -331,7 +407,63 @@ const styles = StyleSheet.create({
   scoreStatValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
   scoreStatLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)" },
   scoreStatDivider: { width: 1, height: 30, backgroundColor: "rgba(255,255,255,0.2)" },
+  searchEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 50,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  searchPlaceholder: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    marginLeft: 10,
+  },
+  promoSlider: { marginTop: 10, marginBottom: 5 },
+  promoContent: { gap: 12, paddingRight: 20 },
+  promoCard: {
+    width: 260,
+    height: 100,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  promoText: { flex: 1 },
+  promoTitle: { color: "#fff", fontSize: 18, fontFamily: "Inter_700Bold" },
+  promoSub: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
   body: { padding: 20, gap: 4 },
+  verifyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.warningLight,
+    padding: 16,
+    borderRadius: 18,
+    marginBottom: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.warning + "30",
+  },
+  verifyIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: Colors.warning,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  verifyTitle: { fontSize: 15, fontFamily: "Inter_700Bold", color: Colors.text },
+  verifyText: { fontSize: 12, fontFamily: "Inter_400Regular", color: Colors.textSecondary, marginTop: 2 },
   newMissionBtn: { marginBottom: 8, borderRadius: 18, overflow: "hidden" },
   newMissionBtnGrad: {
     flexDirection: "row",
@@ -400,4 +532,9 @@ const styles = StyleSheet.create({
   pledgeIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   pledgeTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.text },
   pledgeText: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textSecondary, lineHeight: 16 },
+  referralBanner: { marginBottom: 20, borderRadius: 20, overflow: "hidden" },
+  referralGrad: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 20 },
+  referralInfo: { flex: 1 },
+  referralTitle: { color: "white", fontSize: 16, fontFamily: "Inter_700Bold" },
+  referralDesc: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 4 },
 });

@@ -2,13 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
-export type UserRole = "client" | "artisan";
+export type UserRole = "client" | "artisan" | "admin";
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  verified?: boolean;
   phone?: string;
   avatar?: string;
   trustScore?: number;
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (stored) {
         setUser(JSON.parse(stored));
       }
-    } catch {}
+    } catch { }
     setIsLoading(false);
   }
 

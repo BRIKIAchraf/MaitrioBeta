@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, FlatList } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, FlatList, Alert } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,6 +25,9 @@ export default function WalletScreen() {
   const totalRevenue = completedMissions.reduce((sum, m) => sum + (m.budget || 0), 0);
   const pendingRevenue = missions.filter((m) => m.status === "completed" && m.payment?.status !== "released").reduce((sum, m) => sum + (m.budget || 0), 0);
   const releasedRevenue = totalRevenue - pendingRevenue;
+  const commissionMultiplier = 0.15; // 15% commission
+  const totalFees = isArtisan ? totalRevenue * commissionMultiplier : 0;
+  const netRevenue = totalRevenue - totalFees;
 
   const transactions = completedMissions.map((m) => ({
     id: m.id,
@@ -64,6 +67,17 @@ export default function WalletScreen() {
               <Text style={styles.balanceStatText}>{pendingRevenue}EUR en attente</Text>
             </View>
           </View>
+          {isArtisan ? (
+            <View style={styles.commissionBox}>
+              <Text style={styles.commissionText}>Commission (15%): -{totalFees.toFixed(2)}€</Text>
+              <Text style={styles.commissionNet}>Net: {netRevenue.toFixed(2)}€</Text>
+            </View>
+          ) : (
+            <Pressable style={styles.rechargeBtn} onPress={() => Alert.alert("Recharger", "Redirection vers le gateway de paiement...")}>
+              <Ionicons name="card-outline" size={16} color={Colors.primary} />
+              <Text style={styles.rechargeText}>Recharger le solde</Text>
+            </Pressable>
+          )}
         </View>
       </LinearGradient>
 
@@ -154,4 +168,9 @@ const styles = StyleSheet.create({
   transactionAmount: { alignItems: "flex-end" },
   transactionAmountText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   transactionStatus: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  commissionBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)", flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
+  commissionText: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)" },
+  commissionNet: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.accent },
+  rechargeBtn: { marginTop: 12, backgroundColor: Colors.accent, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12 },
+  rechargeText: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.primary },
 });

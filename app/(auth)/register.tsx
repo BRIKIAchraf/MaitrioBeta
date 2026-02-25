@@ -88,10 +88,9 @@ export default function RegisterScreen() {
                 {role === r && (
                   <LinearGradient
                     colors={[Colors.primary, Colors.primaryLight]}
-                    style={StyleSheet.absoluteFill}
+                    style={[StyleSheet.absoluteFill, { borderRadius: 12 }]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    borderRadius={12}
                   />
                 )}
                 <Ionicons

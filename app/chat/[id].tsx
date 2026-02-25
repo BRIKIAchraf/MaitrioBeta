@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -129,6 +130,9 @@ export default function ChatScreen() {
             { paddingBottom: insets.bottom ? insets.bottom + 4 : Platform.OS === "web" ? 34 : 12 },
           ]}
         >
+          <Pressable style={styles.attachBtn} onPress={() => Alert.alert("Photo", "Fonctionnalité d'envoi de photo bientôt disponible.")}>
+            <Ionicons name="camera-outline" size={24} color={Colors.primary} />
+          </Pressable>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.messageInput}
@@ -140,6 +144,9 @@ export default function ChatScreen() {
               maxLength={1000}
             />
           </View>
+          <Pressable style={styles.voiceBtn} onPress={() => Alert.alert("Vocal", "L'envoi de messages vocaux arrive bientôt.")}>
+            <Ionicons name="mic-outline" size={24} color={Colors.primary} />
+          </Pressable>
           <Pressable
             style={({ pressed }) => [
               styles.sendBtn,
@@ -295,4 +302,6 @@ const styles = StyleSheet.create({
   sendBtnGrad: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   notFound: { flex: 1, alignItems: "center", justifyContent: "center" },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  attachBtn: { padding: 10 },
+  voiceBtn: { padding: 10 },
 });

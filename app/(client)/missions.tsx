@@ -77,10 +77,9 @@ export default function ClientMissionsScreen() {
             {filter === f.key && (
               <LinearGradient
                 colors={[Colors.primary, Colors.primaryLight]}
-                style={StyleSheet.absoluteFill}
+                style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                borderRadius={20}
               />
             )}
             <Text style={[styles.filterChipText, filter === f.key && styles.filterChipTextActive]}>

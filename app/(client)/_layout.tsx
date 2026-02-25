@@ -117,8 +117,10 @@ export default function ClientLayout() {
   useEffect(() => {
     if (!user) {
       router.replace("/");
-    } else if (user.role !== "client") {
+    } else if (user.role === "artisan") {
       router.replace("/(artisan)");
+    } else if (user.role === "admin") {
+      router.replace("/(admin)");
     }
   }, [user]);
 

@@ -84,7 +84,7 @@ export default function MissionDetailScreen() {
   const statusIdx = STATUS_STEPS.indexOf(mission.status);
 
   async function handleAccept() {
-    if (!user) return;
+    if (!user || !mission) return;
     Alert.alert("Accepter la mission ?", "Vous vous engagez a realiser cette mission.", [
       { text: "Annuler", style: "cancel" },
       {
@@ -100,21 +100,30 @@ export default function MissionDetailScreen() {
   }
 
   async function handleEnRoute() {
+    if (!mission) return;
     setIsLoading(true);
     await setEnRoute(mission.id);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsLoading(false);
+    router.push({ pathname: "/mission/[id]/tracking" as any, params: { id: mission.id } });
   }
 
   async function handleCheckIn() {
-    Alert.alert("Confirmer l'arrivee ?", "Vous confirmez votre presence sur le chantier.", [
+    if (!mission) return;
+    Alert.alert("Confirmer l'arrivee ?", "Une photo du chantier est requise pour prouver votre presence.", [
       { text: "Annuler", style: "cancel" },
       {
-        text: "Confirmer",
+        text: "Prendre Photo & Confirmer",
         onPress: async () => {
           setIsLoading(true);
-          await checkIn(mission.id, { lat: 48.8566, lng: 2.3522 }, []);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          try {
+            // Simulated photo capture and GPS capture
+            const mockPhoto = "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=200";
+            await checkIn(mission.id, { lat: 48.8584, lng: 2.2945 }, [mockPhoto]);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (e: any) {
+            Alert.alert("Erreur", e.message);
+          }
           setIsLoading(false);
         },
       },
@@ -122,6 +131,7 @@ export default function MissionDetailScreen() {
   }
 
   async function handleStart() {
+    if (!mission) return;
     Alert.alert("Demarrer les travaux ?", "Confirmez le debut de l'intervention.", [
       { text: "Annuler", style: "cancel" },
       {
@@ -137,30 +147,37 @@ export default function MissionDetailScreen() {
   }
 
   async function handleComplete() {
+    if (!mission) return;
     if (!reportText.trim()) {
       setShowReport(true);
       return;
     }
-    Alert.alert("Terminer la mission ?", "Confirmer la fin des travaux et envoyer le rapport au client.", [
+    Alert.alert("Terminer la mission ?", "Une photo du resultat final est requise pour clore la mission.", [
       { text: "Annuler", style: "cancel" },
       {
-        text: "Terminer",
+        text: "Prendre Photo & Terminer",
         onPress: async () => {
           setIsLoading(true);
-          await completeMission(mission.id, reportText, []);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          try {
+            const mockAfterPhoto = "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?q=80&w=200";
+            await completeMission(mission.id, reportText, [mockAfterPhoto]);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowReport(false);
+          } catch (e: any) {
+            Alert.alert("Erreur", e.message);
+          }
           setIsLoading(false);
-          setShowReport(false);
         },
       },
     ]);
   }
 
   async function handleValidate() {
-    Alert.alert("Valider la mission ?", "Vous confirmez que les travaux sont conformes. Le paiement sera libere.", [
+    if (!mission) return;
+    Alert.alert("Signer et Valider ?", "En signant, vous liberez le paiement et attestez de la qualite des travaux. (Preuve Juridique)", [
       { text: "Annuler", style: "cancel" },
       {
-        text: "Valider et payer",
+        text: "Signer & Payer",
         onPress: async () => {
           setIsLoading(true);
           if (!mission.payment) {
@@ -175,6 +192,7 @@ export default function MissionDetailScreen() {
   }
 
   async function handleDispute() {
+    if (!mission) return;
     Alert.alert("Signaler un litige ?", "Notre equipe examinera votre reclamation dans les plus brefs delais.", [
       { text: "Annuler", style: "cancel" },
       {
@@ -200,7 +218,7 @@ export default function MissionDetailScreen() {
   }
 
   async function submitRating() {
-    if (ratingData.overall === 0) return;
+    if (!mission || ratingData.overall === 0) return;
     setIsLoading(true);
     await rateMission(mission.id, ratingData);
     setRatingSubmitted(true);
@@ -209,7 +227,7 @@ export default function MissionDetailScreen() {
   }
 
   async function handleChat() {
-    if (!mission.artisanId || !mission.artisanName || !user) return;
+    if (!mission || !mission.artisanId || !mission.artisanName || !user) return;
     setIsLoading(true);
     const conv = await getOrCreateConversation(
       mission.id, mission.title,
@@ -273,6 +291,16 @@ export default function MissionDetailScreen() {
       </LinearGradient>
 
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+        {mission.quote?.status === "pending" && isClient && (
+          <View style={styles.quoteNotif}>
+            <Ionicons name="document-text" size={20} color={Colors.primary} />
+            <Text style={styles.quoteNotifText}>L'artisan vous a envoyé un devis interactif.</Text>
+            <Pressable onPress={() => router.push({ pathname: "/mission/[id]/quote" as any, params: { id: mission.id } })}>
+              <Text style={styles.quoteNotifLink}>Voir</Text>
+            </Pressable>
+          </View>
+        )}
+
         <View style={styles.timelineSection}>
           <Text style={styles.sectionTitle}>Progression</Text>
           <View style={styles.timeline}>
@@ -318,15 +346,24 @@ export default function MissionDetailScreen() {
               )}
             </View>
             {mission.payment && (
-              <View style={[styles.paymentStatus, { backgroundColor: mission.payment.status === "released" ? Colors.successLight : Colors.warningLight }]}>
-                <Ionicons
-                  name={mission.payment.status === "released" ? "checkmark-circle" : "lock-closed"}
-                  size={14}
-                  color={mission.payment.status === "released" ? Colors.success : Colors.warning}
-                />
-                <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: mission.payment.status === "released" ? Colors.success : Colors.warning }}>
-                  {mission.payment.status === "escrowed" ? "Paiement en sequestre" : mission.payment.status === "released" ? "Paiement libere" : mission.payment.status}
-                </Text>
+              <View style={styles.paymentContainer}>
+                <View style={[styles.paymentStatus, { backgroundColor: mission.payment.status === "released" ? Colors.successLight : Colors.warningLight }]}>
+                  <Ionicons
+                    name={mission.payment.status === "released" ? "checkmark-circle" : "lock-closed"}
+                    size={14}
+                    color={mission.payment.status === "released" ? Colors.success : Colors.warning}
+                  />
+                  <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: mission.payment.status === "released" ? Colors.success : Colors.warning }}>
+                    {mission.payment.status === "escrowed" ? "Paiement en sequestre" : mission.payment.status === "released" ? "Paiement libere" : mission.payment.status}
+                  </Text>
+                </View>
+                {isClient && (
+                  <View style={styles.breakdown}>
+                    <Text style={styles.breakdownText}>Dont TVA (20%): {(mission.budget || 0) * 0.2}€</Text>
+                    <Text style={styles.breakdownText}>Frais Elite Flow (15%): {(mission.budget || 0) * 0.15}€</Text>
+                    <Text style={[styles.breakdownText, { color: Colors.success, fontFamily: "Inter_600SemiBold" }]}>Déclaré & Assuré ✅</Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -370,6 +407,53 @@ export default function MissionDetailScreen() {
 
         {mission.completionReport && (
           <InfoCard title="Rapport de fin" icon="document-text-outline" content={mission.completionReport} />
+        )}
+
+        {(mission.checkInPhotos.length > 0 || mission.checkOutPhotos.length > 0) && (
+          <View style={styles.photoSection}>
+            <Text style={styles.sectionTitle}>Preuves Photos</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+              {mission.checkInPhotos.map((p, i) => (
+                <View key={`in-${i}`} style={styles.photoWrapper}>
+                  <Text style={styles.photoTag}>AVANT</Text>
+                  <View style={styles.photoPlaceholder}>
+                    <Ionicons name="camera" size={20} color={Colors.textMuted} />
+                  </View>
+                </View>
+              ))}
+              {mission.checkOutPhotos.map((p, i) => (
+                <View key={`out-${i}`} style={styles.photoWrapper}>
+                  <Text style={[styles.photoTag, { backgroundColor: Colors.success }]}>APRES</Text>
+                  <View style={styles.photoPlaceholder}>
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {mission.status === "validated" && (
+          <View style={styles.legalBadge}>
+            <Ionicons name="shield-checkmark" size={16} color={Colors.primary} />
+            <Text style={styles.legalBadgeText}>Certifié Authentique - Preuve Juridique NoIR-FREE</Text>
+          </View>
+        )}
+
+        {(mission.status === "completed" || mission.status === "validated") && (
+          <Pressable
+            style={({ pressed }) => [styles.invoiceCard, pressed && { opacity: 0.9 }]}
+            onPress={() => Alert.alert("Facture", "Téléchargement de la facture PDF génération...")}
+          >
+            <View style={styles.invoiceIcon}>
+              <Ionicons name="document-attach" size={24} color={Colors.accent} />
+            </View>
+            <View style={styles.invoiceInfo}>
+              <Text style={styles.invoiceLabel}>Facture automatique</Text>
+              <Text style={styles.invoiceRef}>REF-{mission.id.slice(0, 8).toUpperCase()}</Text>
+            </View>
+            <Ionicons name="download-outline" size={20} color={Colors.textMuted} />
+          </Pressable>
         )}
 
         {showReport && isArtisan && mission.status === "in_progress" && (
@@ -439,8 +523,42 @@ export default function MissionDetailScreen() {
           {isArtisan && !mission.artisanId && mission.status === "pending" && (
             <ActionButton label="Accepter la mission" icon="checkmark-circle" onPress={handleAccept} isLoading={isLoading} gold />
           )}
+
+          {/* Quote Actions */}
+          {isArtisan && mission.artisanId === user?.id && !mission.quote && mission.status === "accepted" && (
+            <ActionButton
+              label="Proposer un devis"
+              icon="document-text"
+              onPress={() => router.push({ pathname: "/mission/[id]/quote" as any, params: { id: mission.id } })}
+              isLoading={isLoading}
+              gold
+            />
+          )}
+
+          {mission.quote && (
+            <ActionButton
+              label={mission.quote.status === "pending" && isClient ? "Voir le devis reçu" : "Voir le devis"}
+              icon="document-attach"
+              onPress={() => router.push({ pathname: "/mission/[id]/quote" as any, params: { id: mission.id } })}
+              isLoading={isLoading}
+              gold={mission.quote.status === "pending" && isClient}
+            />
+          )}
+
           {isArtisan && mission.artisanId === user?.id && mission.status === "accepted" && (
-            <ActionButton label="En route vers le chantier" icon="navigate" onPress={handleEnRoute} isLoading={isLoading} />
+            <View style={{ gap: 10 }}>
+              <ActionButton label="En route vers le chantier" icon="navigate" onPress={handleEnRoute} isLoading={isLoading} />
+              <Pressable
+                style={styles.navBtn}
+                onPress={() => {
+                  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mission.address)}`;
+                  Platform.OS === "web" ? window.open(url, "_blank") : Alert.alert("Navigation", "Ouverture de Maps...");
+                }}
+              >
+                <Ionicons name="map-outline" size={18} color={Colors.primary} />
+                <Text style={styles.navBtnText}>Ouvrir dans Maps</Text>
+              </Pressable>
+            </View>
           )}
           {isArtisan && mission.artisanId === user?.id && mission.status === "en_route" && (
             <ActionButton label="Confirmer l'arrivee (Check-in)" icon="location" onPress={handleCheckIn} isLoading={isLoading} gold />
@@ -450,6 +568,15 @@ export default function MissionDetailScreen() {
           )}
           {isArtisan && mission.artisanId === user?.id && mission.status === "in_progress" && (
             <ActionButton label={showReport && reportText.trim() ? "Envoyer le rapport" : "Terminer la mission"} icon="checkmark-done-circle" onPress={handleComplete} isLoading={isLoading} gold />
+          )}
+          {isClient && mission.status === "en_route" && (
+            <ActionButton
+              label="Suivre l'artisan en temps réel"
+              icon="navigate"
+              onPress={() => router.push({ pathname: "/mission/[id]/tracking" as any, params: { id: mission.id } })}
+              isLoading={isLoading}
+              gold
+            />
           )}
           {isClient && mission.status === "completed" && (
             <>
@@ -602,10 +729,39 @@ const styles = StyleSheet.create({
   actionBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16 },
   actionBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
   disputeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12 },
-  disputeBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.danger },
+  disputeBtnText: { color: Colors.danger, fontSize: 13, fontFamily: "Inter_600SemiBold", marginLeft: 8 },
   chatBtn: { borderRadius: 16, overflow: "hidden" },
   chatBtnGrad: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingVertical: 16, borderRadius: 16 },
   chatBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
   notFound: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   notFoundText: { fontSize: 16, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  invoiceCard: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.surface, borderRadius: 16, padding: 16, gap: 12, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2, borderWidth: 1, borderColor: Colors.borderLight },
+  invoiceIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  invoiceInfo: { flex: 1 },
+  invoiceLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  invoiceRef: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
+  navBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, backgroundColor: Colors.surface, borderRadius: 16, borderWidth: 1, borderColor: Colors.border },
+  navBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.primary },
+  photoSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 16, gap: 10, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
+  photoWrapper: { width: 100, gap: 6 },
+  photoTag: { position: "absolute", top: 4, left: 4, zIndex: 1, backgroundColor: Colors.primary, color: "#fff", fontSize: 8, fontFamily: "Inter_700Bold", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  photoPlaceholder: { width: 100, height: 100, borderRadius: 12, backgroundColor: Colors.surfaceSecondary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border, borderStyle: "dashed" },
+  legalBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.accentSoft, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: Colors.accent + "40" },
+  legalBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold", color: Colors.primary, letterSpacing: 0.5 },
+  paymentContainer: { gap: 8 },
+  breakdown: { marginTop: 4, padding: 10, backgroundColor: Colors.surfaceSecondary, borderRadius: 10, gap: 4 },
+  breakdownText: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.textMuted },
+  quoteNotif: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accentSoft,
+    padding: 15,
+    borderRadius: 16,
+    marginBottom: 20,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.accent + "30",
+  },
+  quoteNotifText: { flex: 1, fontSize: 13, color: Colors.primary, fontFamily: "Inter_500Medium" },
+  quoteNotifLink: { fontSize: 13, color: Colors.primary, fontFamily: "Inter_700Bold", textDecorationLine: "underline" },
 });

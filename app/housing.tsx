@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Dimensions, Alert } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,12 +11,12 @@ import { useMissions } from "@/context/mission-context";
 const { width } = Dimensions.get("window");
 
 const SCORE_CATEGORIES = [
-  { key: "plomberie", label: "Plomberie", icon: "water", score: 85, maxScore: 100, color: "#3B82F6" },
-  { key: "electricite", label: "Electricite", icon: "flash", score: 72, maxScore: 100, color: "#F59E0B" },
-  { key: "peinture", label: "Peinture & Murs", icon: "color-palette", score: 90, maxScore: 100, color: "#EC4899" },
-  { key: "menuiserie", label: "Menuiserie", icon: "hammer", score: 65, maxScore: 100, color: "#8B5CF6" },
-  { key: "climatisation", label: "Climatisation", icon: "thermometer", score: 78, maxScore: 100, color: "#06B6D4" },
-  { key: "jardinage", label: "Espaces verts", icon: "leaf", score: 88, maxScore: 100, color: "#22C55E" },
+  { key: "debarras", label: "Débarras", icon: "trash", score: 85, maxScore: 100, color: "#6B7280" },
+  { key: "nettoyage", label: "Nettoyage", icon: "sparkles", score: 92, maxScore: 100, color: "#06B6D4" },
+  { key: "serrurier", label: "Serrurier", icon: "key", score: 100, maxScore: 100, color: "#F59E0B" },
+  { key: "plomberie", label: "Plomberie", icon: "water", score: 82, maxScore: 100, color: "#3B82F6" },
+  { key: "electricite", label: "Électricité", icon: "flash", score: 72, maxScore: 100, color: "#FBBF24" },
+  { key: "frigoriste", label: "Frigoriste", icon: "snow", score: 88, maxScore: 100, color: "#60A5FA" },
 ];
 
 export default function HousingDossierScreen() {
@@ -83,6 +83,21 @@ export default function HousingDossierScreen() {
           </View>
         </View>
 
+        <View style={styles.alertsBox}>
+          <View style={styles.alertsHeader}>
+            <Ionicons name="notifications" size={18} color={Colors.warning} />
+            <Text style={styles.alertsTitle}>Alertes Entretien</Text>
+          </View>
+          <View style={styles.alertItem}>
+            <View style={styles.alertDot} />
+            <Text style={styles.alertText}>Révision chaudière recommandée d'ici 30 jours</Text>
+          </View>
+          <View style={styles.alertItem}>
+            <View style={styles.alertDot} />
+            <Text style={styles.alertText}>Curage des gouttières à prévoir (automne)</Text>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>Detail par categorie</Text>
         {SCORE_CATEGORIES.map((cat) => (
           <View key={cat.key} style={styles.categoryCard}>
@@ -100,6 +115,22 @@ export default function HousingDossierScreen() {
             </View>
           </View>
         ))}
+
+        <Text style={styles.sectionTitle}>Documents & Factures PDF</Text>
+        <View style={styles.docsList}>
+          {completedMissions.map((m) => (
+            <Pressable key={m.id} style={styles.docItem} onPress={() => Alert.alert("Ouverture", "Génération du PDF de la mission " + m.title)}>
+              <View style={styles.docIcon}>
+                <Ionicons name="document-text" size={20} color={Colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.docName}>Facture - {m.title}</Text>
+                <Text style={styles.docDate}>{new Date(m.checkOutTime || m.updatedAt).toLocaleDateString()}</Text>
+              </View>
+              <Ionicons name="download-outline" size={18} color={Colors.textMuted} />
+            </Pressable>
+          ))}
+        </View>
 
         <Text style={styles.sectionTitle}>Recommandations</Text>
         <View style={styles.recommendCard}>
@@ -142,8 +173,6 @@ export default function HousingDossierScreen() {
   );
 }
 
-import { Alert } from "react-native";
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { paddingHorizontal: 20, paddingBottom: 20 },
@@ -173,6 +202,17 @@ const styles = StyleSheet.create({
   categoryBar: { height: 6, backgroundColor: Colors.surfaceSecondary, borderRadius: 3, overflow: "hidden" },
   categoryBarFill: { height: "100%", borderRadius: 3 },
   categoryScore: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  alertsBox: { backgroundColor: Colors.warningLight, padding: 16, borderRadius: 18, marginBottom: 8, borderWidth: 1, borderColor: Colors.warning + "30" },
+  alertsHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  alertsTitle: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.warning },
+  alertItem: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
+  alertDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.warning },
+  alertText: { fontSize: 13, fontFamily: "Inter_400Regular", color: Colors.text },
+  docsList: { gap: 10, paddingBottom: 10 },
+  docItem: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.surface, padding: 12, borderRadius: 14, gap: 12, borderWidth: 1, borderColor: Colors.borderLight },
+  docIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
+  docName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.text },
+  docDate: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.textMuted, marginTop: 2 },
   recommendCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", gap: 12, shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
   recommendIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   recommendInfo: { flex: 1 },

@@ -14,12 +14,15 @@ export type MissionStatus =
   | "disputed";
 
 export type MissionCategory =
+  | "debarras"
+  | "nettoyage"
+  | "serrurier"
   | "plomberie"
   | "electricite"
+  | "frigoriste"
   | "peinture"
   | "menuiserie"
   | "jardinage"
-  | "nettoyage"
   | "climatisation"
   | "maconnerie"
   | "autre";
@@ -32,6 +35,16 @@ export interface RatingCriteria {
   communication: number;
   overall: number;
   comment?: string;
+}
+
+export interface Quote {
+  id: string;
+  laborCost: number;
+  partsCost: number;
+  totalCost: number;
+  notes?: string;
+  status: "pending" | "accepted" | "rejected";
+  createdAt: string;
 }
 
 export interface PaymentInfo {
@@ -70,6 +83,10 @@ export interface Mission {
   completionReport?: string;
   clientSignature?: boolean;
   payment?: PaymentInfo;
+  quote?: Quote;
+  clientLocation?: { lat: number; lng: number };
+  artisanLocation?: { lat: number; lng: number };
+  eta?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +109,9 @@ interface MissionContextValue {
   disputeMission: (missionId: string) => Promise<void>;
   escrowPayment: (missionId: string, amount: number) => Promise<void>;
   releasePayment: (missionId: string) => Promise<void>;
+  proposeQuote: (missionId: string, quoteData: Omit<Quote, "id" | "status" | "createdAt">) => Promise<void>;
+  respondToQuote: (missionId: string, response: "accepted" | "rejected") => Promise<void>;
+  updateMissionLocation: (missionId: string, location: { lat: number; lng: number }) => Promise<void>;
 }
 
 export interface CreateMissionData {
@@ -113,12 +133,15 @@ const STORAGE_KEY = "@maison_missions";
 
 function estimateDuration(category: MissionCategory): string {
   const durations: Record<MissionCategory, string> = {
+    debarras: "2-5h",
+    nettoyage: "2-4h",
+    serrurier: "1h",
     plomberie: "1-3h",
     electricite: "2-4h",
+    frigoriste: "2-4h",
     peinture: "4-8h",
     menuiserie: "3-6h",
     jardinage: "2-4h",
-    nettoyage: "2-4h",
     climatisation: "2-4h",
     maconnerie: "4-8h",
     autre: "2-4h",
@@ -152,6 +175,8 @@ function generateSeedMissions(): Mission[] {
       budget: 150,
       estimatedPrice: { min: 120, max: 180 },
       estimatedDuration: "1-2h",
+      clientLocation: { lat: 48.8584, lng: 2.2945 },
+      artisanLocation: { lat: 48.8534, lng: 2.3488 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -173,6 +198,8 @@ function generateSeedMissions(): Mission[] {
       budget: 200,
       estimatedPrice: { min: 150, max: 250 },
       estimatedDuration: "2-3h",
+      clientLocation: { lat: 45.7640, lng: 4.8357 },
+      artisanLocation: { lat: 45.7500, lng: 4.8500 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -194,6 +221,8 @@ function generateSeedMissions(): Mission[] {
       budget: 350,
       estimatedPrice: { min: 280, max: 400 },
       estimatedDuration: "4-6h",
+      clientLocation: { lat: 43.2965, lng: 5.3698 },
+      artisanLocation: { lat: 43.3000, lng: 5.4000 },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
@@ -218,7 +247,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         setMissions(seeds);
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(seeds));
       }
-    } catch {}
+    } catch { }
     setIsLoading(false);
   }
 
@@ -277,6 +306,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   }
 
   async function checkIn(missionId: string, location: { lat: number; lng: number }, photos: string[]) {
+    if (photos.length === 0) throw new Error("Une photo de presence est obligatoire pour le check-in");
     await updateMission(missionId, {
       status: "arrived",
       checkInTime: new Date().toISOString(),
@@ -290,6 +320,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   }
 
   async function completeMission(missionId: string, report: string, photos: string[]) {
+    if (photos.length === 0) throw new Error("Une photo du travail termine est obligatoire");
+    if (!report.trim()) throw new Error("Le rapport de fin est obligatoire");
     await updateMission(missionId, {
       status: "completed",
       checkOutTime: new Date().toISOString(),
@@ -321,14 +353,41 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  async function releasePayment(missionId: string) {
+  const releasePayment = async (missionId: string) => {
+    await updateMission(missionId, {
+      payment: { amount: missions.find(m => m.id === missionId)?.payment?.amount || 0, status: "released", method: "wallet", releasedAt: new Date().toISOString() }
+    });
+  };
+
+  const proposeQuote = async (missionId: string, quoteData: Omit<Quote, "id" | "status" | "createdAt">) => {
+    const newQuote: Quote = {
+      ...quoteData,
+      id: await Crypto.randomUUID(),
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+    await updateMission(missionId, { quote: newQuote });
+  };
+
+  const respondToQuote = async (missionId: string, response: "accepted" | "rejected") => {
     const mission = missions.find((m) => m.id === missionId);
-    if (mission?.payment) {
-      await updateMission(missionId, {
-        payment: { ...mission.payment, status: "released", releasedAt: new Date().toISOString() },
-      });
-    }
-  }
+    if (!mission || !mission.quote) return;
+
+    const updatedQuote: Quote = {
+      ...mission.quote,
+      status: response,
+    };
+
+    // If accepted, we can also update the mission budget to the quote total
+    await updateMission(missionId, {
+      quote: updatedQuote,
+      budget: response === "accepted" ? updatedQuote.totalCost : mission.budget
+    });
+  };
+
+  const updateMissionLocation = useCallback(async (missionId: string, location: { lat: number; lng: number }) => {
+    await updateMission(missionId, { artisanLocation: location });
+  }, [updateMission]);
 
   const value = useMemo<MissionContextValue>(
     () => ({
@@ -349,8 +408,11 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       disputeMission,
       escrowPayment,
       releasePayment,
+      proposeQuote,
+      respondToQuote,
+      updateMissionLocation,
     }),
-    [missions, isLoading]
+    [missions, isLoading, updateMission]
   );
 
   return <MissionContext.Provider value={value}>{children}</MissionContext.Provider>;
