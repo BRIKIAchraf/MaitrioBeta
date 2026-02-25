@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
     View,
     Text,
@@ -6,6 +6,9 @@ import {
     Pressable,
     Alert,
     Dimensions,
+    Platform,
+    ActivityIndicator,
+    ScrollView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,42 +16,137 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { useMissions } from "@/context/mission-context";
+import { useAuth } from "@/context/auth-context";
+import { apiRequest } from "@/lib/query-client";
 
 const { width } = Dimensions.get("window");
 
 export default function MissionCompletionScreen() {
     const { id } = useLocalSearchParams();
     const insets = useSafeAreaInsets();
+    const { user } = useAuth();
+    const { getMission } = useMissions();
+    const mission = getMission(id as string);
     const [signed, setSigned] = useState(false);
+    const [signatureData, setSignatureData] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const isDrawing = useRef(false);
 
-    const handleSignature = () => {
+    const setupCanvas = useCallback((node: any) => {
+        if (Platform.OS !== "web" || !node) return;
+        const canvas = node as HTMLCanvasElement;
+        canvasRef.current = canvas;
+        canvas.width = Math.min(width - 50, 500);
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "#1E3A5F";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+        }
+
+        canvas.onmousedown = (e: MouseEvent) => {
+            isDrawing.current = true;
+            const rect = canvas.getBoundingClientRect();
+            ctx?.beginPath();
+            ctx?.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        };
+        canvas.onmousemove = (e: MouseEvent) => {
+            if (!isDrawing.current) return;
+            const rect = canvas.getBoundingClientRect();
+            ctx?.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            ctx?.stroke();
+        };
+        canvas.onmouseup = () => {
+            isDrawing.current = false;
+        };
+        canvas.onmouseleave = () => {
+            isDrawing.current = false;
+        };
+
+        canvas.ontouchstart = (e: TouchEvent) => {
+            e.preventDefault();
+            isDrawing.current = true;
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            ctx?.beginPath();
+            ctx?.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        };
+        canvas.ontouchmove = (e: TouchEvent) => {
+            e.preventDefault();
+            if (!isDrawing.current) return;
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            ctx?.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+            ctx?.stroke();
+        };
+        canvas.ontouchend = () => {
+            isDrawing.current = false;
+        };
+    }, []);
+
+    const handleClearSignature = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        setSigned(false);
+        setSignatureData(null);
+    };
+
+    const handleSaveSignature = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+            setSigned(true);
+            setSignatureData("mock-signature-data");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            return;
+        }
+        const data = canvas.toDataURL("image/png");
+        setSignatureData(data);
         setSigned(true);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     };
 
-    const finalizeMission = () => {
-        if (!signed) {
+    const finalizeMission = async () => {
+        if (!signed || !signatureData) {
             Alert.alert("Signature manquante", "Le client doit signer pour valider la fin des travaux.");
             return;
         }
 
         setIsProcessing(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        try {
+            await apiRequest("POST", `/api/missions/${id}/signature`, {
+                signatureData,
+                signedBy: user?.id,
+            });
 
-        setTimeout(() => {
-            setIsProcessing(false);
+            await apiRequest("POST", `/api/missions/${id}/complete`);
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
             Alert.alert(
-                "Mission Terminée ! 🏁",
-                "L'argent a été transféré instantanément sur votre portefeuille Maîtrio. Le client recevra sa facture par email.",
+                "Mission Terminee",
+                "L'argent a ete transfere sur votre portefeuille. Le client recevra sa facture par email.",
                 [{ text: "Retour au Dashboard", onPress: () => router.push("/(artisan)") }]
             );
-        }, 2500);
+        } catch (e: any) {
+            Alert.alert("Erreur", e.message || "Une erreur est survenue");
+        }
+        setIsProcessing(false);
     };
 
     return (
-        <View style={styles.container}>
-            <LinearGradient colors={["#0F172A", "#1E293B"]} style={[styles.header, { paddingTop: insets.top + 20 }]}>
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+            <LinearGradient colors={["#0F172A", "#1E293B"]} style={[styles.header, { paddingTop: (insets.top || (Platform.OS === "web" ? 50 : 0)) + 20 }]}>
                 <View style={styles.headerRow}>
                     <Pressable onPress={() => router.back()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color="white" />
@@ -60,37 +158,73 @@ export default function MissionCompletionScreen() {
 
             <View style={styles.content}>
                 <View style={styles.summaryCard}>
-                    <Text style={styles.summaryTitle}>Récapitulatif Final</Text>
+                    <Text style={styles.summaryTitle}>Recapitulatif Final</Text>
                     <View style={styles.row}>
                         <Text style={styles.label}>Intervention</Text>
-                        <Text style={styles.value}>Réparation Fuite Robinet</Text>
+                        <Text style={styles.value}>{mission?.title || "Mission"}</Text>
                     </View>
                     <View style={styles.row}>
-                        <Text style={styles.label}>Total à régler</Text>
-                        <Text style={styles.totalValue}>124.50€</Text>
+                        <Text style={styles.label}>Total</Text>
+                        <Text style={styles.totalValue}>{mission?.finalPrice || mission?.estimatedPrice || "---"}EUR</Text>
                     </View>
                 </View>
 
-                <Text style={styles.sectionTitle}>Signature Électronique (Client)</Text>
-                <Text style={styles.sectionDesc}>En signant, vous attestez de la bonne réalisation des travaux et autorisez le déblocage immédiat des fonds.</Text>
+                <Text style={styles.sectionTitle}>Signature Electronique (Client)</Text>
+                <Text style={styles.sectionDesc}>En signant, vous attestez de la bonne realisation des travaux et autorisez le deblocage immediat des fonds.</Text>
 
-                <Pressable
-                    style={[styles.signaturePad, signed && styles.signaturePadSigned]}
-                    onPress={handleSignature}
-                >
-                    {signed ? (
-                        <View style={styles.signedContainer}>
-                            <Ionicons name="checkmark-done" size={60} color={Colors.success} />
-                            <Text style={styles.signedText}>Signé par le Client</Text>
-                        </View>
-                    ) : (
-                        <Text style={styles.signPlaceholder}>Signez ici sur l'écran</Text>
-                    )}
-                </Pressable>
+                {Platform.OS === "web" ? (
+                    <View style={styles.canvasWrapper}>
+                        {!signed ? (
+                            <>
+                                <canvas
+                                    ref={setupCanvas}
+                                    style={{
+                                        border: "2px dashed #CBD5E1",
+                                        borderRadius: 16,
+                                        cursor: "crosshair",
+                                        touchAction: "none",
+                                    }}
+                                />
+                                <View style={styles.canvasBtnRow}>
+                                    <Pressable style={styles.clearBtn} onPress={handleClearSignature}>
+                                        <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                                        <Text style={styles.clearBtnText}>Effacer</Text>
+                                    </Pressable>
+                                    <Pressable style={styles.saveBtn} onPress={handleSaveSignature}>
+                                        <Ionicons name="checkmark" size={16} color="white" />
+                                        <Text style={styles.saveBtnText}>Valider la signature</Text>
+                                    </Pressable>
+                                </View>
+                            </>
+                        ) : (
+                            <View style={styles.signedContainer}>
+                                <Ionicons name="checkmark-done" size={60} color={Colors.success} />
+                                <Text style={styles.signedText}>Signe par le Client</Text>
+                                <Pressable onPress={handleClearSignature}>
+                                    <Text style={styles.resignText}>Resigner</Text>
+                                </Pressable>
+                            </View>
+                        )}
+                    </View>
+                ) : (
+                    <Pressable
+                        style={[styles.signaturePad, signed && styles.signaturePadSigned]}
+                        onPress={handleSaveSignature}
+                    >
+                        {signed ? (
+                            <View style={styles.signedContainer}>
+                                <Ionicons name="checkmark-done" size={60} color={Colors.success} />
+                                <Text style={styles.signedText}>Signe par le Client</Text>
+                            </View>
+                        ) : (
+                            <Text style={styles.signPlaceholder}>Signez ici sur l'ecran</Text>
+                        )}
+                    </Pressable>
+                )}
 
                 <View style={styles.infoBox}>
                     <Ionicons name="flash" size={20} color={Colors.accent} />
-                    <Text style={styles.infoText}>Instant Payout activé : Fonds transférés en 0.2s après signature.</Text>
+                    <Text style={styles.infoText}>Instant Payout active : Fonds transferes en 0.2s apres signature.</Text>
                 </View>
 
                 <Pressable
@@ -98,12 +232,14 @@ export default function MissionCompletionScreen() {
                     onPress={finalizeMission}
                     disabled={isProcessing}
                 >
-                    <Text style={styles.finishBtnText}>
-                        {isProcessing ? "DÉBLOCAGE DES FONDS..." : "FINALISER ET RECEVOIR LE PAIEMENT"}
-                    </Text>
+                    {isProcessing ? (
+                        <ActivityIndicator color="white" />
+                    ) : (
+                        <Text style={styles.finishBtnText}>FINALISER ET RECEVOIR LE PAIEMENT</Text>
+                    )}
                 </Pressable>
             </View>
-        </View>
+        </ScrollView>
     );
 }
 
@@ -123,12 +259,19 @@ const styles = StyleSheet.create({
     totalValue: { fontSize: 18, fontFamily: "Inter_800ExtraBold", color: Colors.primary },
     sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: Colors.text, marginBottom: 8 },
     sectionDesc: { fontSize: 13, color: Colors.textMuted, lineHeight: 18, marginBottom: 20 },
-    signaturePad: { width: "100%", height: 200, backgroundColor: "white", borderRadius: 20, borderWidth: 2, borderStyle: "dashed", borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
+    canvasWrapper: { alignItems: "center", marginBottom: 20 },
+    canvasBtnRow: { flexDirection: "row", gap: 12, marginTop: 12 },
+    clearBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: Colors.danger },
+    clearBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: Colors.danger },
+    saveBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: Colors.success },
+    saveBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "white" },
+    signaturePad: { width: "100%", height: 200, backgroundColor: "white", borderRadius: 20, borderWidth: 2, borderStyle: "dashed", borderColor: Colors.border, alignItems: "center", justifyContent: "center", marginBottom: 20 },
     signaturePadSigned: { borderStyle: "solid", borderColor: Colors.success, backgroundColor: "#F0FDF4" },
     signPlaceholder: { color: Colors.textMuted, fontFamily: "Inter_500Medium" },
-    signedContainer: { alignItems: "center" },
+    signedContainer: { alignItems: "center", paddingVertical: 20 },
     signedText: { marginTop: 10, color: Colors.success, fontFamily: "Inter_700Bold" },
-    infoBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFBEB", padding: 15, borderRadius: 16, gap: 10, marginVertical: 30 },
+    resignText: { marginTop: 8, color: Colors.primary, fontFamily: "Inter_600SemiBold", textDecorationLine: "underline" },
+    infoBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFBEB", padding: 15, borderRadius: 16, gap: 10, marginVertical: 20 },
     infoText: { flex: 1, fontSize: 12, color: "#92400E", fontFamily: "Inter_600SemiBold" },
     finishBtn: { backgroundColor: Colors.primary, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
     finishBtnDisabled: { opacity: 0.6 },

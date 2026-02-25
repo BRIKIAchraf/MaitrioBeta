@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -37,8 +37,12 @@ const CATEGORY_ICONS: Record<string, string> = {
 export default function ArtisanMissionsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { getAvailableMissions, getArtisanMissions, acceptMission } = useMissions();
+  const { getAvailableMissions, getArtisanMissions, acceptMission, refreshMissions } = useMissions();
   const [filter, setFilter] = useState("available");
+
+  useEffect(() => {
+    if (user) refreshMissions(user.id, "artisan");
+  }, [user?.id]);
 
   const available = getAvailableMissions();
   const my = user ? getArtisanMissions(user.id) : [];

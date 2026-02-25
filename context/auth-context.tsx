@@ -1,28 +1,34 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Crypto from "expo-crypto";
+import { apiRequest } from "@/lib/query-client";
 
 export type UserRole = "client" | "artisan" | "admin";
 
 export interface User {
   id: string;
+  username: string;
+  firstName?: string;
+  lastName?: string;
   name: string;
   email: string;
   role: UserRole;
   verified?: boolean;
   phone?: string;
   avatar?: string;
+  avatarUrl?: string;
   trustScore?: number;
   housingScore?: number;
   kycStatus?: "pending" | "verified" | "rejected";
   revenue?: number;
   createdAt: string;
+  artisanProfile?: any;
+  wallet?: any;
 }
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -39,7 +45,6 @@ export interface RegisterData {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = "@maison_user";
-const USERS_KEY = "@maison_users";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -59,50 +64,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }
 
-  async function getUsers(): Promise<Record<string, { user: User; password: string }>> {
-    try {
-      const stored = await AsyncStorage.getItem(USERS_KEY);
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
-    }
-  }
-
-  async function saveUsers(users: Record<string, { user: User; password: string }>) {
-    await AsyncStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-
-  async function login(email: string, password: string) {
-    const users = await getUsers();
-    const record = users[email.toLowerCase()];
-    if (!record || record.password !== password) {
-      throw new Error("Email ou mot de passe incorrect");
-    }
-    setUser(record.user);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(record.user));
+  async function login(username: string, password: string) {
+    const res = await apiRequest("POST", "/api/auth/login", { username, password });
+    const data = await res.json();
+    const u: User = {
+      ...data,
+      name: [data.firstName, data.lastName].filter(Boolean).join(" ") || data.username,
+      email: data.email || "",
+      createdAt: data.createdAt || new Date().toISOString(),
+    };
+    setUser(u);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(u));
   }
 
   async function register(data: RegisterData) {
-    const users = await getUsers();
-    if (users[data.email.toLowerCase()]) {
-      throw new Error("Un compte avec cet email existe déjà");
-    }
-    const newUser: User = {
-      id: Crypto.randomUUID(),
+    const nameParts = data.name.split(" ");
+    const firstName = nameParts[0] || data.name;
+    const lastName = nameParts.slice(1).join(" ") || "";
+    const username = data.email.split("@")[0] + "." + Date.now().toString(36);
+
+    const res = await apiRequest("POST", "/api/auth/register", {
+      username,
+      password: data.password,
+      email: data.email,
+      phone: data.phone,
+      firstName,
+      lastName,
+      role: data.role,
+    });
+    const created = await res.json();
+    const u: User = {
+      ...created,
       name: data.name,
       email: data.email,
-      role: data.role,
-      phone: data.phone,
-      trustScore: data.role === "artisan" ? 4.2 : undefined,
-      housingScore: data.role === "client" ? 72 : undefined,
-      kycStatus: data.role === "artisan" ? "pending" : undefined,
-      revenue: data.role === "artisan" ? 0 : undefined,
-      createdAt: new Date().toISOString(),
+      createdAt: created.createdAt || new Date().toISOString(),
     };
-    users[data.email.toLowerCase()] = { user: newUser, password: data.password };
-    await saveUsers(users);
-    setUser(newUser);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
+    setUser(u);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(u));
   }
 
   async function logout() {
@@ -115,11 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const updated = { ...user, ...data };
     setUser(updated);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    const users = await getUsers();
-    if (users[user.email.toLowerCase()]) {
-      users[user.email.toLowerCase()].user = updated;
-      await saveUsers(users);
-    }
   }
 
   const value = useMemo<AuthContextValue>(

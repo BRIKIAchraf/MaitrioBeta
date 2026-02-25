@@ -20,6 +20,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "list.bullet", selected: "list.bullet" }} />
         <Label>Missions</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="wallet">
+        <Icon sf={{ default: "wallet.pass", selected: "wallet.pass.fill" }} />
+        <Label>Wallet</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Profil</Label>
@@ -75,6 +79,18 @@ function ClassicTabLayout() {
               <SymbolView name="list.bullet" tintColor={color} size={size} />
             ) : (
               <Ionicons name="list" size={size} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="wallet"
+        options={{
+          title: "Wallet",
+          tabBarIcon: ({ color, size }) =>
+            isIOS ? (
+              <SymbolView name="wallet.pass.fill" tintColor={color} size={size} />
+            ) : (
+              <Ionicons name="wallet" size={size} color={color} />
             ),
         }}
       />

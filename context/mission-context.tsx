@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Crypto from "expo-crypto";
+import { apiRequest } from "@/lib/query-client";
 
 export type MissionStatus =
   | "pending"
@@ -58,7 +57,7 @@ export interface PaymentInfo {
 export interface Mission {
   id: string;
   clientId: string;
-  clientName: string;
+  clientName?: string;
   artisanId?: string;
   artisanName?: string;
   category: MissionCategory;
@@ -66,27 +65,19 @@ export interface Mission {
   description: string;
   address: string;
   scheduledDate: string;
-  scheduledTime: string;
+  scheduledTime?: string;
   status: MissionStatus;
   photos: string[];
-  checkInPhotos: string[];
-  checkOutPhotos: string[];
+  checkInPhotos?: string[];
+  checkOutPhotos?: string[];
   budget?: number;
-  estimatedPrice?: { min: number; max: number };
+  estimatedPrice?: number | { min: number; max: number };
+  finalPrice?: number;
   estimatedDuration?: string;
   urgency: UrgencyLevel;
   rating?: RatingCriteria;
-  checkInTime?: string;
-  checkOutTime?: string;
-  checkInLocation?: { lat: number; lng: number };
-  checkOutLocation?: { lat: number; lng: number };
-  completionReport?: string;
-  clientSignature?: boolean;
-  payment?: PaymentInfo;
-  quote?: Quote;
-  clientLocation?: { lat: number; lng: number };
-  artisanLocation?: { lat: number; lng: number };
-  eta?: string;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,193 +85,93 @@ export interface Mission {
 interface MissionContextValue {
   missions: Mission[];
   isLoading: boolean;
+  refreshMissions: (userId?: string, role?: string) => Promise<void>;
   createMission: (data: CreateMissionData) => Promise<Mission>;
   updateMission: (id: string, data: Partial<Mission>) => Promise<void>;
+  getMission: (id: string) => Mission | undefined;
   getMissionsByClient: (clientId: string) => Mission[];
   getAvailableMissions: () => Mission[];
   getArtisanMissions: (artisanId: string) => Mission[];
   acceptMission: (missionId: string, artisanId: string, artisanName: string) => Promise<void>;
-  setEnRoute: (missionId: string) => Promise<void>;
-  checkIn: (missionId: string, location: { lat: number; lng: number }, photos: string[]) => Promise<void>;
-  startMission: (missionId: string) => Promise<void>;
   completeMission: (missionId: string, report: string, photos: string[]) => Promise<void>;
   validateMission: (missionId: string) => Promise<void>;
   rateMission: (missionId: string, rating: RatingCriteria) => Promise<void>;
   disputeMission: (missionId: string) => Promise<void>;
-  escrowPayment: (missionId: string, amount: number) => Promise<void>;
-  releasePayment: (missionId: string) => Promise<void>;
-  proposeQuote: (missionId: string, quoteData: Omit<Quote, "id" | "status" | "createdAt">) => Promise<void>;
-  respondToQuote: (missionId: string, response: "accepted" | "rejected") => Promise<void>;
-  updateMissionLocation: (missionId: string, location: { lat: number; lng: number }) => Promise<void>;
 }
 
 export interface CreateMissionData {
   clientId: string;
-  clientName: string;
+  clientName?: string;
   category: MissionCategory;
   title: string;
   description: string;
   address: string;
-  scheduledDate: string;
-  scheduledTime: string;
-  photos: string[];
+  scheduledDate?: string;
+  scheduledTime?: string;
+  photos?: string[];
   budget?: number;
   urgency?: UrgencyLevel;
 }
 
 const MissionContext = createContext<MissionContextValue | null>(null);
-const STORAGE_KEY = "@maison_missions";
-
-function estimateDuration(category: MissionCategory): string {
-  const durations: Record<MissionCategory, string> = {
-    debarras: "2-5h",
-    nettoyage: "2-4h",
-    serrurier: "1h",
-    plomberie: "1-3h",
-    electricite: "2-4h",
-    frigoriste: "2-4h",
-    peinture: "4-8h",
-    menuiserie: "3-6h",
-    jardinage: "2-4h",
-    climatisation: "2-4h",
-    maconnerie: "4-8h",
-    autre: "2-4h",
-  };
-  return durations[category] || "2-4h";
-}
-
-function generateSeedMissions(): Mission[] {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const nextWeek = new Date(now);
-  nextWeek.setDate(now.getDate() + 7);
-
-  return [
-    {
-      id: "seed-1",
-      clientId: "demo-client",
-      clientName: "Marie Dupont",
-      category: "plomberie",
-      title: "Fuite robinet cuisine",
-      description: "Robinet qui goutte depuis 2 semaines, besoin d'un remplacement",
-      address: "12 Rue de la Paix, Paris 75001",
-      scheduledDate: tomorrow.toISOString().split("T")[0],
-      scheduledTime: "09:00",
-      status: "pending",
-      photos: [],
-      checkInPhotos: [],
-      checkOutPhotos: [],
-      urgency: "normal" as UrgencyLevel,
-      budget: 150,
-      estimatedPrice: { min: 120, max: 180 },
-      estimatedDuration: "1-2h",
-      clientLocation: { lat: 48.8584, lng: 2.2945 },
-      artisanLocation: { lat: 48.8534, lng: 2.3488 },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "seed-2",
-      clientId: "demo-client2",
-      clientName: "Pierre Martin",
-      category: "electricite",
-      title: "Installation prises électriques",
-      description: "Installation de 3 nouvelles prises dans le salon",
-      address: "45 Avenue Victor Hugo, Lyon 69006",
-      scheduledDate: nextWeek.toISOString().split("T")[0],
-      scheduledTime: "14:00",
-      status: "pending",
-      photos: [],
-      checkInPhotos: [],
-      checkOutPhotos: [],
-      urgency: "normal" as UrgencyLevel,
-      budget: 200,
-      estimatedPrice: { min: 150, max: 250 },
-      estimatedDuration: "2-3h",
-      clientLocation: { lat: 45.7640, lng: 4.8357 },
-      artisanLocation: { lat: 45.7500, lng: 4.8500 },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-    {
-      id: "seed-3",
-      clientId: "demo-client3",
-      clientName: "Sophie Bernard",
-      category: "peinture",
-      title: "Peinture chambre 12m²",
-      description: "Peinture complète d'une chambre, murs et plafond blanc",
-      address: "8 Boulevard Gambetta, Marseille 13001",
-      scheduledDate: nextWeek.toISOString().split("T")[0],
-      scheduledTime: "08:30",
-      status: "pending",
-      photos: [],
-      checkInPhotos: [],
-      checkOutPhotos: [],
-      urgency: "urgent" as UrgencyLevel,
-      budget: 350,
-      estimatedPrice: { min: 280, max: 400 },
-      estimatedDuration: "4-6h",
-      clientLocation: { lat: 43.2965, lng: 5.3698 },
-      artisanLocation: { lat: 43.3000, lng: 5.4000 },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    },
-  ];
-}
 
 export function MissionProvider({ children }: { children: ReactNode }) {
   const [missions, setMissions] = useState<Mission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    loadMissions();
+  const refreshMissions = useCallback(async (userId?: string, role?: string) => {
+    setIsLoading(true);
+    try {
+      if (userId && role === "artisan") {
+        const [artisanRes, pendingRes] = await Promise.all([
+          apiRequest("GET", `/api/missions?artisanId=${userId}`),
+          apiRequest("GET", "/api/missions?status=pending"),
+        ]);
+        const artisanMissions = await artisanRes.json();
+        const pendingMissions = await pendingRes.json();
+        const allIds = new Set(artisanMissions.map((m: any) => m.id));
+        const combined = [...artisanMissions, ...pendingMissions.filter((m: any) => !allIds.has(m.id))];
+        setMissions(combined);
+      } else if (userId && role === "client") {
+        const res = await apiRequest("GET", `/api/missions?clientId=${userId}`);
+        setMissions(await res.json());
+      } else {
+        const res = await apiRequest("GET", "/api/missions");
+        setMissions(await res.json());
+      }
+    } catch (e) {
+      console.error("Failed to fetch missions:", e);
+    }
+    setIsLoading(false);
   }, []);
 
-  async function loadMissions() {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setMissions(JSON.parse(stored));
-      } else {
-        const seeds = generateSeedMissions();
-        setMissions(seeds);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(seeds));
-      }
-    } catch { }
-    setIsLoading(false);
-  }
-
-  async function saveMissions(updated: Mission[]) {
-    setMissions(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  }
-
   async function createMission(data: CreateMissionData): Promise<Mission> {
-    const budget = data.budget || 0;
-    const mission: Mission = {
-      ...data,
-      id: Crypto.randomUUID(),
-      status: "pending",
-      checkInPhotos: [],
-      checkOutPhotos: [],
+    const res = await apiRequest("POST", "/api/missions", {
+      clientId: data.clientId,
+      title: data.title,
+      description: data.description,
+      category: data.category,
+      address: data.address,
+      estimatedPrice: data.budget,
       urgency: data.urgency || "normal",
-      estimatedPrice: budget ? { min: Math.round(budget * 0.8), max: Math.round(budget * 1.2) } : undefined,
-      estimatedDuration: estimateDuration(data.category),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [mission, ...missions];
-    await saveMissions(updated);
+      photos: JSON.stringify(data.photos || []),
+      status: "pending",
+    });
+    const mission = await res.json();
+    setMissions(prev => [mission, ...prev]);
     return mission;
   }
 
   async function updateMission(id: string, data: Partial<Mission>) {
-    const updated = missions.map((m) =>
-      m.id === id ? { ...m, ...data, updatedAt: new Date().toISOString() } : m
-    );
-    await saveMissions(updated);
+    const res = await apiRequest("PUT", `/api/missions/${id}`, data);
+    const updated = await res.json();
+    setMissions(prev => prev.map(m => m.id === id ? { ...m, ...updated } : m));
   }
+
+  const getMission = useCallback(
+    (id: string) => missions.find((m) => m.id === id),
+    [missions]
+  );
 
   const getMissionsByClient = useCallback(
     (clientId: string) => missions.filter((m) => m.clientId === clientId),
@@ -298,121 +189,56 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   );
 
   async function acceptMission(missionId: string, artisanId: string, artisanName: string) {
-    await updateMission(missionId, { artisanId, artisanName, status: "accepted" });
+    const res = await apiRequest("POST", `/api/missions/${missionId}/accept`, { artisanId });
+    const updated = await res.json();
+    setMissions(prev => prev.map(m => m.id === missionId ? { ...m, ...updated } : m));
   }
 
-  async function setEnRoute(missionId: string) {
-    await updateMission(missionId, { status: "en_route" });
-  }
-
-  async function checkIn(missionId: string, location: { lat: number; lng: number }, photos: string[]) {
-    if (photos.length === 0) throw new Error("Une photo de presence est obligatoire pour le check-in");
-    await updateMission(missionId, {
-      status: "arrived",
-      checkInTime: new Date().toISOString(),
-      checkInLocation: location,
-      checkInPhotos: photos,
-    });
-  }
-
-  async function startMission(missionId: string) {
-    await updateMission(missionId, { status: "in_progress" });
-  }
-
-  async function completeMission(missionId: string, report: string, photos: string[]) {
-    if (photos.length === 0) throw new Error("Une photo du travail termine est obligatoire");
-    if (!report.trim()) throw new Error("Le rapport de fin est obligatoire");
-    await updateMission(missionId, {
-      status: "completed",
-      checkOutTime: new Date().toISOString(),
-      completionReport: report,
-      checkOutPhotos: photos,
-    });
+  async function completeMission(missionId: string, _report: string, _photos: string[]) {
+    const res = await apiRequest("POST", `/api/missions/${missionId}/complete`, {});
+    const updated = await res.json();
+    setMissions(prev => prev.map(m => m.id === missionId ? { ...m, ...updated } : m));
   }
 
   async function validateMission(missionId: string) {
-    const mission = missions.find((m) => m.id === missionId);
-    await updateMission(missionId, {
-      status: "validated",
-      clientSignature: true,
-      payment: mission?.payment ? { ...mission.payment, status: "released", releasedAt: new Date().toISOString() } : undefined,
-    });
+    await updateMission(missionId, { status: "validated" });
   }
 
   async function rateMission(missionId: string, rating: RatingCriteria) {
-    await updateMission(missionId, { rating });
+    const mission = missions.find(m => m.id === missionId);
+    if (mission && mission.artisanId) {
+      await apiRequest("POST", "/api/reviews", {
+        missionId,
+        fromUserId: mission.clientId,
+        toUserId: mission.artisanId,
+        rating: rating.overall,
+        comment: rating.comment,
+      });
+    }
   }
 
   async function disputeMission(missionId: string) {
     await updateMission(missionId, { status: "disputed" });
   }
 
-  async function escrowPayment(missionId: string, amount: number) {
-    await updateMission(missionId, {
-      payment: { amount, status: "escrowed", paidAt: new Date().toISOString(), method: "card" },
-    });
-  }
-
-  const releasePayment = async (missionId: string) => {
-    await updateMission(missionId, {
-      payment: { amount: missions.find(m => m.id === missionId)?.payment?.amount || 0, status: "released", method: "wallet", releasedAt: new Date().toISOString() }
-    });
-  };
-
-  const proposeQuote = async (missionId: string, quoteData: Omit<Quote, "id" | "status" | "createdAt">) => {
-    const newQuote: Quote = {
-      ...quoteData,
-      id: await Crypto.randomUUID(),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    await updateMission(missionId, { quote: newQuote });
-  };
-
-  const respondToQuote = async (missionId: string, response: "accepted" | "rejected") => {
-    const mission = missions.find((m) => m.id === missionId);
-    if (!mission || !mission.quote) return;
-
-    const updatedQuote: Quote = {
-      ...mission.quote,
-      status: response,
-    };
-
-    // If accepted, we can also update the mission budget to the quote total
-    await updateMission(missionId, {
-      quote: updatedQuote,
-      budget: response === "accepted" ? updatedQuote.totalCost : mission.budget
-    });
-  };
-
-  const updateMissionLocation = useCallback(async (missionId: string, location: { lat: number; lng: number }) => {
-    await updateMission(missionId, { artisanLocation: location });
-  }, [updateMission]);
-
   const value = useMemo<MissionContextValue>(
     () => ({
       missions,
       isLoading,
+      refreshMissions,
       createMission,
       updateMission,
+      getMission,
       getMissionsByClient,
       getAvailableMissions,
       getArtisanMissions,
       acceptMission,
-      setEnRoute,
-      checkIn,
-      startMission,
       completeMission,
       validateMission,
       rateMission,
       disputeMission,
-      escrowPayment,
-      releasePayment,
-      proposeQuote,
-      respondToQuote,
-      updateMissionLocation,
     }),
-    [missions, isLoading, updateMission]
+    [missions, isLoading, refreshMissions, getMission, getMissionsByClient, getAvailableMissions, getArtisanMissions]
   );
 
   return <MissionContext.Provider value={value}>{children}</MissionContext.Provider>;

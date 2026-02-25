@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import LottieAnimation from "@/components/LottieAnimation";
+
 
 const { width, height } = Dimensions.get("window");
 
@@ -91,10 +91,8 @@ export default function OnboardingScreen() {
           <View style={[styles.slide, { width }]}>
             <View style={[styles.iconCircle, { backgroundColor: item.color + "18" }]}>
               <View style={[styles.iconInner, { backgroundColor: item.color + "25" }]}>
-                <LottieAnimation
                   source={{ uri: getLottieForSlide(item.icon) }}
                   style={{ width: 120, height: 120 }}
-                />
               </View>
             </View>
             <Text style={styles.slideTitle}>{item.title}</Text>

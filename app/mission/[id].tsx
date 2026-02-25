@@ -49,9 +49,8 @@ export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const {
-    missions, acceptMission, setEnRoute, checkIn, startMission,
+    missions, acceptMission, updateMission,
     completeMission, validateMission, rateMission, disputeMission,
-    escrowPayment, releasePayment,
   } = useMissions();
   const { getOrCreateConversation } = useChat();
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +101,7 @@ export default function MissionDetailScreen() {
   async function handleEnRoute() {
     if (!mission) return;
     setIsLoading(true);
-    await setEnRoute(mission.id);
+    await updateMission(mission.id, { status: "en_route" });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsLoading(false);
     router.push({ pathname: "/mission/[id]/tracking" as any, params: { id: mission.id } });
@@ -110,20 +109,14 @@ export default function MissionDetailScreen() {
 
   async function handleCheckIn() {
     if (!mission) return;
-    Alert.alert("Confirmer l'arrivee ?", "Une photo du chantier est requise pour prouver votre presence.", [
+    Alert.alert("Confirmer l'arrivee ?", "Confirmez votre presence sur le chantier.", [
       { text: "Annuler", style: "cancel" },
       {
-        text: "Prendre Photo & Confirmer",
+        text: "Confirmer",
         onPress: async () => {
           setIsLoading(true);
-          try {
-            // Simulated photo capture and GPS capture
-            const mockPhoto = "https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=200";
-            await checkIn(mission.id, { lat: 48.8584, lng: 2.2945 }, [mockPhoto]);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch (e: any) {
-            Alert.alert("Erreur", e.message);
-          }
+          await updateMission(mission.id, { status: "arrived" });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setIsLoading(false);
         },
       },
@@ -138,7 +131,7 @@ export default function MissionDetailScreen() {
         text: "Demarrer",
         onPress: async () => {
           setIsLoading(true);
-          await startMission(mission.id);
+          await updateMission(mission.id, { status: "in_progress" });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setIsLoading(false);
         },
@@ -180,9 +173,6 @@ export default function MissionDetailScreen() {
         text: "Signer & Payer",
         onPress: async () => {
           setIsLoading(true);
-          if (!mission.payment) {
-            await escrowPayment(mission.id, mission.budget || 0);
-          }
           await validateMission(mission.id);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setIsLoading(false);
@@ -384,52 +374,14 @@ export default function MissionDetailScreen() {
           </Pressable>
         )}
 
-        {mission.checkInTime && (
+        {mission.status === "arrived" && (
           <View style={styles.checkCard}>
             <View style={styles.checkRow}>
               <Ionicons name="log-in-outline" size={18} color={Colors.success} />
               <View>
-                <Text style={styles.checkLabel}>Check-in</Text>
-                <Text style={styles.checkTime}>{new Date(mission.checkInTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</Text>
+                <Text style={styles.checkLabel}>Artisan arrive sur place</Text>
               </View>
             </View>
-            {mission.checkOutTime && (
-              <View style={styles.checkRow}>
-                <Ionicons name="log-out-outline" size={18} color={Colors.info} />
-                <View>
-                  <Text style={styles.checkLabel}>Check-out</Text>
-                  <Text style={styles.checkTime}>{new Date(mission.checkOutTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</Text>
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {mission.completionReport && (
-          <InfoCard title="Rapport de fin" icon="document-text-outline" content={mission.completionReport} />
-        )}
-
-        {(mission.checkInPhotos.length > 0 || mission.checkOutPhotos.length > 0) && (
-          <View style={styles.photoSection}>
-            <Text style={styles.sectionTitle}>Preuves Photos</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-              {mission.checkInPhotos.map((p, i) => (
-                <View key={`in-${i}`} style={styles.photoWrapper}>
-                  <Text style={styles.photoTag}>AVANT</Text>
-                  <View style={styles.photoPlaceholder}>
-                    <Ionicons name="camera" size={20} color={Colors.textMuted} />
-                  </View>
-                </View>
-              ))}
-              {mission.checkOutPhotos.map((p, i) => (
-                <View key={`out-${i}`} style={styles.photoWrapper}>
-                  <Text style={[styles.photoTag, { backgroundColor: Colors.success }]}>APRES</Text>
-                  <View style={styles.photoPlaceholder}>
-                    <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
           </View>
         )}
 

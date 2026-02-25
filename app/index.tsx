@@ -21,8 +21,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/auth-context";
-import LottieAnimation from "@/components/LottieAnimation";
-import { useMissions } from "@/context/mission-context";
 
 const { width, height } = Dimensions.get("window");
 
@@ -30,17 +28,18 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const { user, isLoading } = useAuth();
 
-  const logoOpacity = useSharedValue(0);
-  const logoScale = useSharedValue(0.7);
-  const titleOpacity = useSharedValue(0);
-  const titleTranslate = useSharedValue(30);
-  const subtitleOpacity = useSharedValue(0);
-  const cardsOpacity = useSharedValue(0);
-  const cardsTranslate = useSharedValue(40);
-  const buttonsOpacity = useSharedValue(0);
+  const isWeb = Platform.OS === "web";
+  const logoOpacity = useSharedValue(isWeb ? 1 : 0);
+  const logoScale = useSharedValue(isWeb ? 1 : 0.7);
+  const titleOpacity = useSharedValue(isWeb ? 1 : 0);
+  const titleTranslate = useSharedValue(isWeb ? 0 : 30);
+  const subtitleOpacity = useSharedValue(isWeb ? 1 : 0);
+  const cardsOpacity = useSharedValue(isWeb ? 1 : 0);
+  const cardsTranslate = useSharedValue(isWeb ? 0 : 40);
+  const buttonsOpacity = useSharedValue(isWeb ? 1 : 0);
 
   useEffect(() => {
-    if (isLoading || user) return;
+    if (isLoading || user || isWeb) return;
 
     logoOpacity.value = withDelay(200, withTiming(1, { duration: 600 }));
     logoScale.value = withDelay(200, withSpring(1, { damping: 12 }));
@@ -93,10 +92,7 @@ export default function WelcomeScreen() {
             colors={[Colors.primary, Colors.primaryLight]}
             style={styles.logoGradient}
           >
-            <LottieAnimation
-              source={{ uri: "https://assets9.lottiefiles.com/packages/lf20_m6zL9X.json" }}
-              style={{ width: 100, height: 100 }}
-            />
+            <Ionicons name="home" size={36} color="#FFFFFF" />
           </LinearGradient>
           <View style={styles.logoAccent}>
             <LinearGradient

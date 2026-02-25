@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -52,13 +52,18 @@ const QUICK_ACTIONS = [
 export default function ClientHomeScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { getMissionsByClient } = useMissions();
+  const { missions, refreshMissions } = useMissions();
 
-  const missions = user ? getMissionsByClient(user.id) : [];
+  useEffect(() => {
+    if (user) {
+      refreshMissions(user.id, user.role);
+    }
+  }, [user?.id]);
+
   const activeMissions = missions.filter((m) =>
-    ["pending", "accepted", "in_progress"].includes(m.status)
+    ["pending", "accepted", "in_progress", "en_route", "arrived"].includes(m.status)
   );
-  const completedCount = missions.filter((m) => m.status === "completed").length;
+  const completedCount = missions.filter((m) => ["completed", "validated"].includes(m.status)).length;
 
   const greeting = getGreeting();
 
@@ -108,7 +113,7 @@ export default function ClientHomeScreen() {
 
         <Pressable
           style={styles.searchEntry}
-          onPress={() => router.push("/(client)/search")}
+          onPress={() => router.push("/mission/new")}
         >
           <Ionicons name="search" size={20} color="rgba(255,255,255,0.6)" />
           <Text style={styles.searchPlaceholder}>Rechercher un artisan (Plombier, Électricien...)</Text>
@@ -315,11 +320,11 @@ function MissionCard({ mission, onPress }: { mission: any; onPress: () => void }
       </View>
       <View style={styles.missionCardFooter}>
         <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
-        <Text style={styles.missionCardDate}>{formatDate(mission.scheduledDate)} à {mission.scheduledTime}</Text>
-        {mission.budget && (
+        <Text style={styles.missionCardDate}>{formatDate(mission.scheduledDate || mission.createdAt)}</Text>
+        {(mission.estimatedPrice || mission.finalPrice) && (
           <>
             <View style={styles.dotDivider} />
-            <Text style={styles.missionCardBudget}>{mission.budget}€</Text>
+            <Text style={styles.missionCardBudget}>{mission.finalPrice || (typeof mission.estimatedPrice === 'number' ? mission.estimatedPrice : '')}€</Text>
           </>
         )}
       </View>

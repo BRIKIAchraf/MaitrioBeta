@@ -25,22 +25,24 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/context/auth-context";
 import { useMissions, Mission } from "@/context/mission-context";
-import LottieAnimation from "@/components/LottieAnimation";
+
 
 const { width, height } = Dimensions.get("window");
 
 function MissionTrackingScreen() {
     const { id } = useLocalSearchParams();
     const insets = useSafeAreaInsets();
-    const { missions, updateMissionLocation, updateMission } = useMissions();
+    const { missions, updateMission } = useMissions();
     const { user } = useAuth();
     const mission = missions.find((m) => m.id === id);
 
-    const [currentLocation, setCurrentLocation] = useState(mission?.artisanLocation || { lat: 48.8566, lng: 2.3522 });
+    const [currentLocation, setCurrentLocation] = useState({ lat: mission?.latitude || 48.8566, lng: mission?.longitude || 2.3522 });
     const [distance, setDistance] = useState(1200); // 1.2km mocked
     const [eta, setEta] = useState(8); // 8 mins mocked
 
     const mapRef = useRef<any>(null);
+    const destLat = mission?.latitude || 48.8566;
+    const destLng = mission?.longitude || 2.3522;
     const bottomSheetY = useSharedValue(height);
 
     useEffect(() => {
@@ -68,10 +70,10 @@ function MissionTrackingScreen() {
             setEta((prev) => Math.max(1, Math.round(distance / 150)));
 
             // Move marker slightly towards client
-            if (mission.clientLocation && mission.artisanLocation) {
+            if (true) {
                 const step = 0.0005;
-                const dLat = mission.clientLocation.lat - currentLocation.lat;
-                const dLng = mission.clientLocation.lng - currentLocation.lng;
+                const dLat = destLat - currentLocation.lat;
+                const dLng = destLng - currentLocation.lng;
                 const magnitude = Math.sqrt(dLat * dLat + dLng * dLng);
 
                 if (magnitude > step) {
@@ -80,7 +82,7 @@ function MissionTrackingScreen() {
                         lng: currentLocation.lng + (dLng / magnitude) * step,
                     };
                     setCurrentLocation(nextLocation);
-                    updateMissionLocation(mission.id, nextLocation);
+                    
                 }
             }
         }, 5000);
@@ -100,15 +102,15 @@ function MissionTrackingScreen() {
                 ref={mapRef}
                 style={styles.map}
                 initialRegion={{
-                    latitude: ((mission.artisanLocation?.lat ?? 48.8566) + (mission.clientLocation?.lat ?? 48.8566)) / 2,
-                    longitude: ((mission.artisanLocation?.lng ?? 2.3522) + (mission.clientLocation?.lng ?? 2.3522)) / 2,
+                    latitude: ((currentLocation.lat) + (destLat)) / 2,
+                    longitude: ((currentLocation.lng) + (destLng)) / 2,
                     latitudeDelta: 0.05,
                     longitudeDelta: 0.05,
                 }}
             >
-                {mission.clientLocation && (
+                {true && (
                     <Marker
-                        coordinate={{ latitude: mission.clientLocation.lat, longitude: mission.clientLocation.lng }}
+                        coordinate={{ latitude: destLat, longitude: destLng }}
                         title="Votre domicile"
                     >
                         <View style={styles.homeMarker}>
@@ -121,7 +123,7 @@ function MissionTrackingScreen() {
                 {currentLocation && (
                     <Marker
                         coordinate={{ latitude: currentLocation.lat, longitude: currentLocation.lng }}
-                        title={mission.artisanName}
+                        title={mission?.title}
                     >
                         <View style={styles.artisanMarker}>
                             <MaterialCommunityIcons name="car-electric" size={24} color="white" />
@@ -129,11 +131,11 @@ function MissionTrackingScreen() {
                     </Marker>
                 )}
 
-                {mission.clientLocation?.lat != null && mission.clientLocation?.lng != null && currentLocation?.lat != null && currentLocation?.lng != null && (
+                {true && currentLocation?.lat != null && currentLocation?.lng != null && (
                     <Polyline
                         coordinates={[
                             { latitude: currentLocation.lat, longitude: currentLocation.lng },
-                            { latitude: mission.clientLocation.lat, longitude: mission.clientLocation.lng },
+                            { latitude: destLat, longitude: destLng },
                         ] as any}
                         strokeColor={Colors.primary}
                         strokeWidth={4}
@@ -151,7 +153,7 @@ function MissionTrackingScreen() {
                     <Ionicons name="chevron-back" size={24} color={Colors.text} />
                 </Pressable>
                 <View style={styles.headerInfo}>
-                    <Text style={styles.headerTitle}>{mission.artisanName}</Text>
+                    <Text style={styles.headerTitle}>{mission?.title}</Text>
                     <View style={styles.guaranteeRow}>
                         <Ionicons name="time-outline" size={14} color={Colors.primary} />
                         <Text style={styles.guaranteeText}>Garantie 30min: 14:22 restants</Text>
@@ -185,7 +187,7 @@ function MissionTrackingScreen() {
                 <View style={styles.artisanInfo}>
                     <View style={styles.avatarContainer}>
                         <LinearGradient colors={[Colors.primary, Colors.primaryLight]} style={styles.avatar}>
-                            <Text style={styles.avatarText}>{mission.artisanName?.charAt(0)}</Text>
+                            <Text style={styles.avatarText}>{mission?.title?.charAt(0)}</Text>
                         </LinearGradient>
                         <View style={styles.badgeContainer}>
                             <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
@@ -193,7 +195,7 @@ function MissionTrackingScreen() {
                     </View>
 
                     <View style={styles.textContainer}>
-                        <Text style={styles.artisanName}>{mission.artisanName}</Text>
+                        <Text style={styles.artisanName}>{mission?.title}</Text>
                         <View style={styles.ratingContainer}>
                             <Ionicons name="star" size={14} color="#FFD700" />
                             <Text style={styles.ratingText}>4.9 (128 avis)</Text>
